@@ -80,10 +80,11 @@ class ConstituencyGraphConstructor(GraphConstructor):
             for child_node in current_node.children:
                 self.construct(child_node, [current_label, current_index], answers)
 
-    def pipeline(self, dataset_size: int) -> list:
+    def pipeline(self, dataset_size: int) -> dict:
         graph_dict = dict()
         for data in tqdm(list(self.dataset_split)[:dataset_size]):
             context = data["context"]
+            question = data["question"]
             answers = data["answers"]["text"]
             qid = data["id"]
 
@@ -107,7 +108,8 @@ class ConstituencyGraphConstructor(GraphConstructor):
                 head, tail = relation.split("=")
                 graph_data[head, 'connect', tail].edge_index = torch.tensor(self.R[relation]).t().contiguous()
             
-            graph_dict[qid] = graph_data
+            graph_dict[qid] = (graph_data, question)
+        return graph_dict
 
 # Unit test
 if __name__ == "__main__":
