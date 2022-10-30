@@ -31,37 +31,13 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
 
 def train(dataloader):
     model.train()
-
-    total_examples = total_loss = 0
-
-    for batch in dataloader:
-        print(batch)
-        data = batch[0].to(device)
-
-        optimizer.zero_grad()
-        loss = loss_op(model(data.x_dict, data.edge_index_dict), data.y_dict)
-
-        total_examples += len(batch)
-        total_loss += loss.item() * data.num_graphs
-
-        loss.backward()
-        optimizer.step()
-        
-    return total_loss / len(dataloader.dataset)
+    pass
 
 
 @torch.no_grad()
 def eval(val_loader):
     model.eval()
-
-    ys, preds = [], []
-    for data in val_loader:
-        ys.append(data.y)
-        out = model(data.x.to(device), data.edge_index.to(device))
-        preds.append((out > 0).float().cpu())
-
-    y, pred = torch.cat(ys, dim=0).numpy(), torch.cat(preds, dim=0).numpy()
-    return f1_score(y, pred, average='micro') if pred.sum() > 0 else 0
+    pass
 
 
 for epoch in range(10):

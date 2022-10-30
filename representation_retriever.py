@@ -24,12 +24,12 @@ class RepresentationRetriever(object):
     def get_pooled_representation(self, text: str) -> tensor:
         model_output = self.get_model_output(text)
         pooled_representation = model_output.pooler_output
-        return pooled_representation
+        return pooled_representation[0]
 
     def get_pooled_representation(self, token_list: list) -> tensor:
         model_output = self.get_model_output(" ".join(token_list))
         pooled_representation = model_output.pooler_output
-        return pooled_representation
+        return pooled_representation[0]
 
 
 # Unit tests

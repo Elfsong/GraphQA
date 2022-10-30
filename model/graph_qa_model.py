@@ -66,4 +66,4 @@ class HGT(torch.nn.Module):
         for conv in self.convs:
             x_dict = conv(x_dict, edge_index_dict)
 
-        return self.lin(x_dict['author'])
+        return self.lin(x_dict['context'])

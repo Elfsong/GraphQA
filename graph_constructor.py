@@ -8,8 +8,9 @@
 import torch
 import stanza
 import networkx as nx
-import matplotlib.pyplot as plt
 import torch_geometric
+import matplotlib.pyplot as plt
+import torch_geometric.transforms as T
 
 from tqdm import tqdm
 from typing import List
@@ -57,7 +58,7 @@ class ConstituencyGraphConstructor(GraphConstructor):
         self.c_parser = ConstituencyParser()
 
         # MetaData
-        self.metadata = (["question", "context"], [("question", "connect", "question"), ("question", "connect", "context"), ("context", "connect", "context")])
+        self.metadata = (["question", "context"], [("question", "connect", "question"), ("context", "connect", "question"), ("context", "connect", "context")])
     
     def set_temporary_variables(self):
         self.X = defaultdict(list)
@@ -133,6 +134,8 @@ class ConstituencyGraphConstructor(GraphConstructor):
             for relation in self.R:
                 head, tail = relation.split("=")
                 graph_data[head, 'connect', tail].edge_index = torch.tensor(self.R[relation]).t().contiguous()
+
+            # graph_data = T.ToUndirected()(graph_data)
             
             graph_list += [[graph_data, {"qid": qid, "context": context, "question": question, "answers": answers}]]
         return graph_list
