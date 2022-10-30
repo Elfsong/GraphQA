@@ -1,5 +1,8 @@
 name: syntax
 channels:
+  - pytorch
+  - pyg
+  - nvidia
   - conda-forge
   - defaults
 dependencies:
