@@ -19,7 +19,6 @@ val_dataset = GraphQADataset(split="validation", data_size=1)
 train_dataloader = DataListLoader(train_dataset, batch_size=1, shuffle=True)
 val_dataloader = DataListLoader(val_dataset, batch_size=1, shuffle=False)
 
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 model = HGT(hidden_channels=64, out_channels=2, num_heads=4, num_layers=2, metadata=train_dataset.metadata)
@@ -31,7 +30,19 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
 
 def train(dataloader):
     model.train()
-    pass
+    
+    total_loss = 0
+    for batch in dataloader:
+        data = batch[0]
+        optimizer.zero_grad()
+        out = model(data.x_dict, data.edge_index_dict)
+
+        loss = loss_op(out, data["context"].y)
+        print(loss)
+        total_loss += loss.item()
+        loss.backward()
+    
+    return total_loss / len(dataloader)
 
 
 @torch.no_grad()
