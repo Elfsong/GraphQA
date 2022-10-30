@@ -1,10 +1,17 @@
-# Set up environment
+# Step 1. Set up environment
+```shell
 conda env create -f environment.yml
+```
 
-FYI: This environment doesn't work properly with Apple Silicon Chips.
+_FYI: This environment doesn't work properly with Apple Silicon Chips_
 
-# Train the model
+# Step 2. Train the model
+```shell
 python train.py
+```
 
-# Evaluate the model
+# Step 3. Evaluate the model
+```shell
+# TODO
 python eval.py
+```
