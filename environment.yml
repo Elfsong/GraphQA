@@ -223,8 +223,6 @@ dependencies:
     - dill==0.3.5.1
     - editdistance==0.6.0
     - emoji==2.1.0
-    - en-core-web-md==3.4.1
-    - en-core-web-trf==3.4.1
     - fastrlock==0.8
     - filelock==3.8.0
     - fonttools==4.38.0
