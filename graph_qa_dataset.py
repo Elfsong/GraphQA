@@ -26,9 +26,13 @@ class GraphQADataset():
         # self.graph_data = T.AddSelfLoops()(self.graph_data)
         # self.graph_data = T.NormalizeFeatures()(self.graph_data)
         pass
+    
+    @property
+    def metadata(self):
+        return self.cgc.metadata
 
     def __len__(self):
         return len(self.graph_data)
 
     def __getitem__(self, idx):
-        return self.graph_data[idx]
+        return self.graph_data[idx][0]

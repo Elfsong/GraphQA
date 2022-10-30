@@ -31,7 +31,6 @@ class ConstituencyParser(object):
         answer_sentences = self.get_sentences(answer)
         return answer_sentences[0].constituency.leaf_labels()
 
-
 class GraphConstructor(object):
     def __init__(self, dataset_name: str, dataset_split: str) -> None:
         #TODO(mingzhe): support other datasets
@@ -56,6 +55,9 @@ class ConstituencyGraphConstructor(GraphConstructor):
 
         # Constituency Parser
         self.c_parser = ConstituencyParser()
+
+        # MetaData
+        self.metadata = (["question", "context"], [("question", "connect", "question"), ("question", "connect", "context"), ("context", "connect", "context")])
     
     def set_temporary_variables(self):
         self.X = defaultdict(list)
@@ -67,9 +69,9 @@ class ConstituencyGraphConstructor(GraphConstructor):
         nx.draw_networkx(G)
         plt.savefig("output.jpg")
 
-    def construct(self, current_node, parent_node, answers):
+    def construct_context(self, current_node, parent_node, answers):
         if not current_node.is_leaf():
-            current_label = current_node.label
+            current_label = "context"
             current_representation = current_node.leaf_labels()        
             current_index = len(self.X[current_label])
             
@@ -78,10 +80,24 @@ class ConstituencyGraphConstructor(GraphConstructor):
             self.R[f"{current_label}={parent_node[0]}"] += [[current_index, parent_node[1]]]
             
             for child_node in current_node.children:
-                self.construct(child_node, [current_label, current_index], answers)
+                self.construct_context(child_node, [current_label, current_index], answers)
+    
+    def construct_question(self, current_node, parent_node):
+        if not current_node.is_leaf():
+            current_label = "question"
+            current_representation = current_node.leaf_labels()        
+            current_index = len(self.X[current_label])
+            
+            self.X[current_label] += [self.r_retriever.get_pooled_representation(current_representation)]
+            self.Y[current_label] += [False]
+            self.R[f"{current_label}={parent_node[0]}"] += [[current_index, parent_node[1]]]
+            
+            for child_node in current_node.children:
+                self.construct_question(child_node, [current_label, current_index])
 
-    def pipeline(self, dataset_size: int) -> dict:
-        graph_dict = dict()
+
+    def pipeline(self, dataset_size: int) -> list:
+        graph_list = list()
         for data in tqdm(list(self.dataset_split)[:dataset_size]):
             context = data["context"]
             question = data["question"]
@@ -89,12 +105,22 @@ class ConstituencyGraphConstructor(GraphConstructor):
             qid = data["id"]
 
             self.set_temporary_variables()
+
+            # Question Graph
+            sentence = self.c_parser.get_sentences(question)[0]
+            self.X["question"] += [self.r_retriever.get_pooled_representation(sentence.constituency.leaf_labels())]
+            self.Y["question"] += [False]
+            self.construct_question(sentence.constituency, ("question", 0))
             
+            # Context Graph
             for sentence_index, sentence in enumerate(self.c_parser.get_sentences(context)):
                 answer_candidates = [self.c_parser.get_answer(answer) for answer in answers]
-                self.X["sentence"] += [self.r_retriever.get_pooled_representation(sentence.constituency.leaf_labels())]
-                self.Y["sentence"] += [sentence.constituency.leaf_labels() in answer_candidates]
-                self.construct(sentence.constituency, ("sentence", sentence_index), answer_candidates)
+                self.X["context"] += [self.r_retriever.get_pooled_representation(sentence.constituency.leaf_labels())]
+                self.Y["context"] += [sentence.constituency.leaf_labels() in answer_candidates]
+
+                self.R["context=question"] += [[sentence_index, 0]]
+
+                self.construct_context(sentence.constituency, ("context", sentence_index), answer_candidates)
 
             graph_data = HeteroData()
 
@@ -108,11 +134,14 @@ class ConstituencyGraphConstructor(GraphConstructor):
                 head, tail = relation.split("=")
                 graph_data[head, 'connect', tail].edge_index = torch.tensor(self.R[relation]).t().contiguous()
             
-            graph_dict[qid] = (graph_data, question)
-        return graph_dict
+            graph_list += [[graph_data, {"qid": qid, "context": context, "question": question, "answers": answers}]]
+        return graph_list
 
 # Unit test
 if __name__ == "__main__":
     cgc = ConstituencyGraphConstructor("squad", "train", "bert-base-uncased")
-    cgc.pipeline(10)
+
+    gd = cgc.pipeline(3)
+    for qid in gd:
+        print(gd[qid])
 
