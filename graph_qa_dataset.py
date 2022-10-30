@@ -6,6 +6,7 @@
 # ---------------------------------------------------------------- 
 
 import torch
+import torch_geometric.transforms as T
 from graph_constructor import ConstituencyGraphConstructor
 
 
@@ -18,6 +19,13 @@ class GraphQADataset():
     
     def process(self):
         self.graph_data = self.cgc.pipeline(self.data_size)
+    
+    def transform(self):
+        # TODO(mingzhe): Control Variables
+        # self.graph_data = T.ToUndirected()(self.graph_data)
+        # self.graph_data = T.AddSelfLoops()(self.graph_data)
+        # self.graph_data = T.NormalizeFeatures()(self.graph_data)
+        pass
 
     def __len__(self):
         return len(self.graph_data)

@@ -4,6 +4,16 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.nn import GATConv
 
+# Pytorch Geometric provides three ways for the user to create models on heterogeneous graph data:
+
+# 1) Automatically convert a homogenous GNN model to a heterogeneous GNN model by making use of torch_geometric.nn.to_hetero() or torch_geometric.nn.to_hetero_with_bases().
+
+# 2) Define inidividual functions for different types using PyGs wrapper torch_geometric.nn.conv.HeteroConv for heterogeneous convolution.
+
+# 3) Deploy existing (or write your own) heterogeneous GNN operators.
+
+# More on https://pytorch-geometric.readthedocs.io/en/latest/notes/heterogeneous.html
+
 class GraphQAModel(torch.nn.Module):
     def __init__(self, num_features: int = 768, num_classes: int = 2):
         super().__init__()
