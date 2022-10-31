@@ -7,6 +7,7 @@
 
 import torch
 import stanza
+import pickle
 import networkx as nx
 import torch_geometric
 import matplotlib.pyplot as plt
@@ -23,7 +24,7 @@ from representation_retriever import RepresentationRetriever
 
 class ConstituencyParser(object):
     def __init__(self):
-        self.pipeline = stanza.Pipeline(lang='en', processors='tokenize,pos,constituency')
+        self.pipeline = stanza.Pipeline(lang='en', processors='tokenize,pos,constituency', use_gpu=True)
         self.pos_tags = self.pipeline.processors['pos'].get_known_xpos()
 
     @lru_cache(maxsize=64, typed=False)
@@ -49,8 +50,10 @@ class GraphConstructor(object):
         raise NotImplementedError
 
 class ConstituencyGraphConstructor(GraphConstructor):
-    def __init__(self, dataset_name: str, dataset_split: str, representation_model: str) -> None:
-        super().__init__(dataset_name, dataset_split)
+    def __init__(self, dataset_name: str, dataset_split_name: str, representation_model: str) -> None:
+        super().__init__(dataset_name, dataset_split_name)
+        # Data Split
+        self.dataset_split_name = dataset_split_name
 
         # Representation Retriever
         self.r_retriever = RepresentationRetriever(representation_model)
@@ -105,10 +108,13 @@ class ConstituencyGraphConstructor(GraphConstructor):
             for child_node in current_node.children:
                 self.construct_question(child_node, [current_label, current_index])
 
+    def dump_instance(self, graph_data):
+        with open(f'./data/{self.dataset_split_name}/{graph_data[1]["qid"]}.pkl', 'wb') as dump_file:
+            pickle.dump(graph_data, dump_file)
 
-    def pipeline(self, dataset_size: int) -> list:
+    def pipeline(self, range: List[int]) -> list:
         graph_list = list()
-        for data in tqdm(list(self.dataset_split)[:dataset_size]):
+        for data in tqdm(list(self.dataset_split)[range[0]:range[1]]):
             context = data["context"]
             question = data["question"]
             answers = data["answers"]["text"]
@@ -147,14 +153,16 @@ class ConstituencyGraphConstructor(GraphConstructor):
             # Convert the graph to undirected graph
             graph_data = T.ToUndirected()(graph_data)
             
-            graph_list += [[graph_data, {"qid": qid, "context": context, "question": question, "answers": answers}]]
+            instance = [graph_data, {"qid": qid, "context": context, "question": question, "answers": answers}]
+            self.dump_instance(instance)
+            graph_list += [instance]
         return graph_list
 
 # Unit test
 if __name__ == "__main__":
     cgc = ConstituencyGraphConstructor("squad", "train", "bert-base-uncased")
 
-    gd = cgc.pipeline(3)
+    gd = cgc.pipeline([0, 10])
     for qid in gd:
         print(gd)
 

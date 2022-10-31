@@ -7,28 +7,27 @@
 
 import pickle
 import torch_geometric.transforms as T
+
+from tqdm import tqdm
+from typing import List
+from pathlib import Path
 from graph_constructor import ConstituencyGraphConstructor
 
-
 class GraphQADataset():
-    def __init__(self, split: str = 'train', data_size: int = -1):
+    def __init__(self, split: str = 'train', data_range: List[int] = [0, -1]):
         assert split in ['train', 'validation']
-        self.data_size = data_size
+        self.data_range = data_range
+        self.split = split
         self.cgc = ConstituencyGraphConstructor("squad", split, "bert-base-uncased")
-        self.process()
+        self.graph_data = list()
     
     def process(self):
-        self.graph_data = self.cgc.pipeline(self.data_size)
-    
-    def dump(self, filename):
-        with open(f'./data/{filename}', 'wb') as dump_file:
-            pickle.dump(self.graph_data, dump_file)
-        print(f"Dumped {len(self.graph_data)} Graphs Successfully!")
+        self.graph_data = self.cgc.pipeline(self.data_range)
 
-    def load(self, filename):
-        with open(f'./data/{filename}', 'rb') as dump_file:
-            pickle.load(self.graph_data, dump_file)
-        print(f"Loaded {len(self.graph_data)} Graphs Successfully!")
+    def load(self):
+        for path in tqdm(Path(f"./data/{self.split}").glob("*.pkl")):
+            with open(path, 'rb') as dump_file:
+                self.graph_data += [pickle.load(dump_file)]
     
     def transform(self):
         # TODO(mingzhe): Control Variables

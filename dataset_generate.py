@@ -7,8 +7,16 @@
 
 from graph_qa_dataset import GraphQADataset
 
-train_dataset = GraphQADataset(split="train", data_size=50)
-val_dataset = GraphQADataset(split="validation", data_size=10)
+# Train Dataset Process
+train_dataset = GraphQADataset(split="train", data_range=[0, 10000])
+train_dataset.process()
 
-train_dataset.dump("train.pkl")
-val_dataset.dump("val.pkl")
+# Val Dataset Process
+val_dataset = GraphQADataset(split="validation", data_range=[0, 1000])
+val_dataset.process()
+
+# # Train Dataset Load
+# train_dataset.load()
+
+# # Val Dataset Load
+# val_dataset.load()
