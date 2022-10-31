@@ -24,7 +24,7 @@ from representation_retriever import RepresentationRetriever
 
 class ConstituencyParser(object):
     def __init__(self):
-        self.pipeline = stanza.Pipeline(lang='en', processors='tokenize,pos,constituency', use_gpu=True)
+        self.pipeline = stanza.Pipeline(lang='en', processors='tokenize,pos,constituency')
         self.pos_tags = self.pipeline.processors['pos'].get_known_xpos()
 
     @lru_cache(maxsize=64, typed=False)
@@ -162,7 +162,7 @@ class ConstituencyGraphConstructor(GraphConstructor):
 if __name__ == "__main__":
     cgc = ConstituencyGraphConstructor("squad", "train", "bert-base-uncased")
 
-    gd = cgc.pipeline([0, 10])
+    gd = cgc.pipeline([0, 10000])
     for qid in gd:
         print(gd)
 

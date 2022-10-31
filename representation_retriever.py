@@ -5,19 +5,25 @@
 # Date:     29/10/2022
 # ---------------------------------------------------------------- 
 
+import torch
 from typing import Any
 from torch import tensor
+from functools import lru_cache
 from transformers import AutoTokenizer, AutoModel
 
 class RepresentationRetriever(object):
     def __init__(self, model_name: str = 'bert-base-uncased') -> None:
         # TODO(mingzhe): support multiple models
         assert model_name == 'bert-base-uncased'
+
+        self.device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name)
+        self.model = self.model.to(self.device)
 
+    @lru_cache(maxsize=64, typed=False)
     def get_model_output(self, text: str) -> Any:
-        encoded_input = self.tokenizer(text, return_tensors='pt')
+        encoded_input = self.tokenizer(text, return_tensors='pt').to(self.device)
         output = self.model(**encoded_input)
         return output
 
