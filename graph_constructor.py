@@ -48,7 +48,6 @@ class GraphConstructor(object):
     def pipeline(self):
         raise NotImplementedError
 
-
 class ConstituencyGraphConstructor(GraphConstructor):
     def __init__(self, dataset_name: str, dataset_split: str, representation_model: str) -> None:
         super().__init__(dataset_name, dataset_split)

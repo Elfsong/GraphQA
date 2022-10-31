@@ -5,7 +5,7 @@
 # Date:     29/10/2022
 # ---------------------------------------------------------------- 
 
-import torch
+import pickle
 import torch_geometric.transforms as T
 from graph_constructor import ConstituencyGraphConstructor
 
@@ -19,6 +19,16 @@ class GraphQADataset():
     
     def process(self):
         self.graph_data = self.cgc.pipeline(self.data_size)
+    
+    def dump(self, filename):
+        with open(f'./data/{filename}', 'wb') as dump_file:
+            pickle.dump(self.graph_data, dump_file)
+        print(f"Dumped {len(self.graph_data)} Graphs Successfully!")
+
+    def load(self, filename):
+        with open(f'./data/{filename}', 'rb') as dump_file:
+            pickle.load(self.graph_data, dump_file)
+        print(f"Loaded {len(self.graph_data)} Graphs Successfully!")
     
     def transform(self):
         # TODO(mingzhe): Control Variables
