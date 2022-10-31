@@ -18,8 +18,7 @@ class RepresentationRetriever(object):
 
         self.device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name)
-        self.model = self.model.to(self.device)
+        self.model = AutoModel.from_pretrained(model_name).to(self.device)
 
     @lru_cache(maxsize=64, typed=False)
     def get_model_output(self, text: str) -> Any:
@@ -30,12 +29,12 @@ class RepresentationRetriever(object):
     def get_pooled_representation(self, text: str) -> tensor:
         model_output = self.get_model_output(text)
         pooled_representation = model_output.pooler_output
-        return pooled_representation[0]
+        return pooled_representation[0].detach()
 
     def get_pooled_representation(self, token_list: list) -> tensor:
         model_output = self.get_model_output(" ".join(token_list))
         pooled_representation = model_output.pooler_output
-        return pooled_representation[0]
+        return pooled_representation[0].detach()
 
 
 # Unit tests
