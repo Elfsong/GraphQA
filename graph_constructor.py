@@ -14,6 +14,7 @@ import torch_geometric.transforms as T
 
 from tqdm import tqdm
 from typing import List
+from functools import lru_cache
 from datasets import load_dataset
 from collections import defaultdict
 from torch_geometric.data import HeteroData
@@ -25,6 +26,7 @@ class ConstituencyParser(object):
         self.pipeline = stanza.Pipeline(lang='en', processors='tokenize,pos,constituency')
         self.pos_tags = self.pipeline.processors['pos'].get_known_xpos()
 
+    @lru_cache(maxsize=64, typed=False)
     def get_sentences(self, doc: str) -> List:
         return self.pipeline(doc).sentences
     
@@ -143,9 +145,8 @@ class ConstituencyGraphConstructor(GraphConstructor):
                 head, tail = relation.split("=")
                 graph_data[head, 'connect', tail].edge_index = torch.tensor(self.R[relation]).t().contiguous()
 
+            # Convert the graph to undirected graph
             graph_data = T.ToUndirected()(graph_data)
-
-            print(graph_data.metadata())
             
             graph_list += [[graph_data, {"qid": qid, "context": context, "question": question, "answers": answers}]]
         return graph_list
@@ -156,5 +157,5 @@ if __name__ == "__main__":
 
     gd = cgc.pipeline(3)
     for qid in gd:
-        print(gd[qid])
+        print(gd)
 
