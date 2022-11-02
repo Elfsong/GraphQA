@@ -1,3 +1,7 @@
+# GraphQA
+
+![Examples](/img/example.png "Example")
+
 # Step 1. Set up environment
 ```shell
 conda env create -f environment.yml
