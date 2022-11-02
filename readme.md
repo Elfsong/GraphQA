@@ -1,6 +1,6 @@
 # GraphQA
 
-![Examples](/data/img/example.png "Example")
+![Examples](/img/example.png "Example")
 
 # Step 1. Set up environment
 ```shell
