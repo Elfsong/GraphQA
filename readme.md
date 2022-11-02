@@ -7,6 +7,8 @@ _FYI: This environment doesn't work properly with Apple Silicon Chips_
 
 # Step 2. Dataset preparation
 ```shell
+mkdir ./data/train
+mkdir ./data/validation
 python dataset_generate.py --worker_num 8 --split train --datasize 10000
 python dataset_generate.py --worker_num 8 --split validation --datasize 1000
 ```
