@@ -44,7 +44,17 @@ class GraphConstructor(object):
 
         # Load dataset
         self.dataset = load_dataset(self.dataset_name)
-        self.dataset_split = self.dataset[self.dataset_split_name] 
+        self.dataset_split = self.dataset[self.dataset_split_name]
+    
+    def virtualize(self, index, graph_data):
+        G = torch_geometric.utils.to_networkx(graph_data.to_homogeneous(), to_undirected=False )
+        plt.figure(figsize=(50, 50))
+        nx.draw_networkx(G)
+        plt.savefig(f"output_{index}.jpg")
+    
+    def dump_instance(self, graph_data):
+        with open(f'./data/{self.dataset_split_name}/{graph_data[1]["qid"]}.pkl', 'wb') as dump_file:
+            pickle.dump(graph_data, dump_file)
 
     def pipeline(self):
         raise NotImplementedError
@@ -63,12 +73,9 @@ class ConstituencyGraphConstructor(GraphConstructor):
 
         # MetaData
         self.metadata = (
-            ['question', 'context'], 
+            ['context'], 
             [
-                ('question', 'connect', 'question'), 
-                ('context', 'connect', 'question'), 
-                ('context', 'connect', 'context'), 
-                ('question', 'rev_connect', 'context')
+                ('context', 'connect', 'context')
             ]
         )
     
@@ -76,12 +83,6 @@ class ConstituencyGraphConstructor(GraphConstructor):
         self.X = defaultdict(list)
         self.Y = defaultdict(list)
         self.R = defaultdict(list)
-    
-    def virtualize(self, index, graph_data):
-        G = torch_geometric.utils.to_networkx(graph_data.to_homogeneous(), to_undirected=False )
-        plt.figure(figsize=(100,100))
-        nx.draw_networkx(G)
-        plt.savefig(f"output_{index}.jpg")
 
     def construct_context(self, current_node, parent_node, answers):
         if not current_node.is_leaf():
@@ -95,68 +96,50 @@ class ConstituencyGraphConstructor(GraphConstructor):
             
             for child_node in current_node.children:
                 self.construct_context(child_node, [current_label, current_index], answers)
-    
-    def construct_question(self, current_node, parent_node):
-        if not current_node.is_leaf():
-            current_label = "question"
-            current_representation = current_node.leaf_labels()        
-            current_index = len(self.X[current_label])
-            
-            self.X[current_label] += [self.r_retriever.get_pooled_representation(current_representation)]
-            self.Y[current_label] += [[0., 1.]]
-            self.R[f"{current_label}={parent_node[0]}"] += [[current_index, parent_node[1]]]
-            
-            for child_node in current_node.children:
-                self.construct_question(child_node, [current_label, current_index])
 
-    def dump_instance(self, graph_data):
-        with open(f'./data/{self.dataset_split_name}/{graph_data[1]["qid"]}.pkl', 'wb') as dump_file:
-            pickle.dump(graph_data, dump_file)
+    def construct(self, data):
+        context = data["context"]
+        question = data["question"]
+        answers = data["answers"]["text"]
+        qid = data["id"]
+
+        self.set_temporary_variables()
+        
+        # Context Graph
+        self.X["context"] += [self.r_retriever.get_pooled_representation([])]
+        self.Y["context"] += [[0., 1.]]
+
+        for sentence_index, sentence in enumerate(self.c_parser.get_sentences(context)):
+            answer_candidates = [self.c_parser.get_answer(answer) for answer in answers]
+            current_index = len(self.X["context"])
+
+            self.X["context"] += [self.r_retriever.get_pooled_representation(sentence.constituency.leaf_labels())]
+            self.Y["context"] += [[1., 0.] if sentence.constituency.leaf_labels() in answer_candidates else [0., 1.]]
+            self.R["context=context"] += [[current_index, 0]]
+            self.construct_context(sentence.constituency, ("context", current_index), answer_candidates)
+
+        graph_data = HeteroData()
+
+        for label in self.X:
+            graph_data[label].x = torch.stack(self.X[label])
+        
+        for label in self.Y:
+            graph_data[label].y = torch.tensor(self.Y[label])
+        
+        for relation in self.R:
+            head, tail = relation.split("=")
+            graph_data[head, 'connect', tail].edge_index = torch.tensor(self.R[relation]).t().contiguous()
+
+        # Augmentation
+        # graph_data = T.ToUndirected()(graph_data)
+        
+        instance = [graph_data, {"qid": qid, "context": context, "question": question, "answers": answers}]
+        return instance
 
     def pipeline(self, range: List[int]) -> list:
         graph_list = list()
         for data in tqdm(list(self.dataset_split)[range[0]:range[1]]):
-            context = data["context"]
-            question = data["question"]
-            answers = data["answers"]["text"]
-            qid = data["id"]
-
-            self.set_temporary_variables()
-
-            # Question Graph
-            sentence = self.c_parser.get_sentences(question)[0]
-            self.X["question"] += [self.r_retriever.get_pooled_representation(sentence.constituency.leaf_labels())]
-            self.Y["question"] += [[0., 1.]]
-            self.construct_question(sentence.constituency, ("question", 0))
-            
-            # Context Graph
-            for sentence_index, sentence in enumerate(self.c_parser.get_sentences(context)):
-                answer_candidates = [self.c_parser.get_answer(answer) for answer in answers]
-                self.X["context"] += [self.r_retriever.get_pooled_representation(sentence.constituency.leaf_labels())]
-                self.Y["context"] += [[1., 0.] if sentence.constituency.leaf_labels() in answer_candidates else [0., 1.]]
-
-                self.R["context=question"] += [[sentence_index, 0]]
-
-                self.construct_context(sentence.constituency, ("context", sentence_index), answer_candidates)
-
-            graph_data = HeteroData()
-
-            for label in self.X:
-                graph_data[label].x = torch.stack(self.X[label])
-            
-            for label in self.Y:
-                graph_data[label].y = torch.tensor(self.Y[label])
-            
-            for relation in self.R:
-                head, tail = relation.split("=")
-                graph_data[head, 'connect', tail].edge_index = torch.tensor(self.R[relation]).t().contiguous()
-
-            # Augmentation
-
-            # Convert the graph to undirected graph
-            graph_data = T.ToUndirected()(graph_data)
-            
-            instance = [graph_data, {"qid": qid, "context": context, "question": question, "answers": answers}]
+            instance = self.construct(data)
             self.dump_instance(instance)
             graph_list += [instance]
         return graph_list
@@ -165,8 +148,23 @@ class ConstituencyGraphConstructor(GraphConstructor):
 if __name__ == "__main__":
     cgc = ConstituencyGraphConstructor("squad", "train", "bert-base-uncased")
 
+    # gd = cgc.construct({
+    #     "context": "Notre Dame's students run a number of news media outlets. The nine student-run outlets include three newspapers.",
+    #     "question": "In what year did the student paper Common Sense begin publication at Notre Dame?",
+    #     "answers": {
+    #         "text": [
+    #             "1987"
+    #         ]
+    #     },
+    #     "id": '5733bf84d058e614000b61c1'
+    # })
+
+    # cgc.virtualize(0, gd[0])
+    # print(gd)
+
     gds = cgc.pipeline([0, 10])
     for index, gd in enumerate(gds):
         print(gd)
         cgc.virtualize(index, gd[0])
+
 
