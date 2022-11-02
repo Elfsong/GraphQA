@@ -11,16 +11,19 @@ from graph_qa_dataset import GraphQADataset
 from torch_geometric.loader import DataListLoader
 from model.graph_qa_model import GAT, HGT
 
+# Dataset Instance
+train_dataset = GraphQADataset(split="train")
+val_dataset = GraphQADataset(split="validation")
 
-train_dataset = GraphQADataset(split="train", data_size=2)
-val_dataset = GraphQADataset(split="validation", data_size=1)
+# Load Dataset from files
+train_dataset.load()
+val_dataset.load()
 
-
+# Construct Dataloader
 train_dataloader = DataListLoader(train_dataset, batch_size=1, shuffle=True)
 val_dataloader = DataListLoader(val_dataset, batch_size=1, shuffle=False)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 model = HGT(hidden_channels=64, out_channels=2, num_heads=4, num_layers=2, metadata=train_dataset.metadata)
 model = model.to(device)
 
