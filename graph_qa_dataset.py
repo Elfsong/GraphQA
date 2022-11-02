@@ -22,10 +22,11 @@ class GraphQADataset():
         self.graph_data = list()
     
     def process(self):
+        print(f"[+] Processing {self.split} dataset...")
         self.graph_data = self.cgc.pipeline(self.data_range)
 
     def load(self):
-        print(f"Loading {self.split} dataset...")
+        print(f"[+] Loading {self.split} dataset...")
         for path in tqdm(Path(f"./data/{self.split}").glob("*.pkl")):
             with open(path, 'rb') as dump_file:
                 self.graph_data += [pickle.load(dump_file)]

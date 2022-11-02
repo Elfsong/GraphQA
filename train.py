@@ -6,6 +6,7 @@
 # ---------------------------------------------------------------- 
 
 import torch
+from tqdm import tqdm
 from sklearn.metrics import f1_score
 from graph_qa_dataset import GraphQADataset
 from torch_geometric.loader import DataListLoader
@@ -20,11 +21,11 @@ train_dataset.load()
 val_dataset.load()
 
 # Construct Dataloader
-train_dataloader = DataListLoader(train_dataset, batch_size=1, shuffle=True)
+train_dataloader = DataListLoader(train_dataset, batch_size=2, shuffle=True)
 val_dataloader = DataListLoader(val_dataset, batch_size=1, shuffle=False)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = HGT(hidden_channels=64, out_channels=2, num_heads=4, num_layers=2, metadata=train_dataset.metadata)
+model = HGT(hidden_channels=64, out_channels=2, num_heads=4, num_layers=4, metadata=train_dataset.metadata)
 model = model.to(device)
 
 loss_op = torch.nn.BCEWithLogitsLoss()
@@ -35,13 +36,12 @@ def train(dataloader):
     model.train()
     
     total_loss = 0
-    for batch in dataloader:
-        data = batch[0]
+    for index, batch in tqdm(enumerate(dataloader)):
+        data = batch[0].to(device)
         optimizer.zero_grad()
         out = model(data.x_dict, data.edge_index_dict)
 
         loss = loss_op(out, data["context"].y)
-        print(loss)
         total_loss += loss.item()
         loss.backward()
     
@@ -55,6 +55,8 @@ def eval(val_loader):
 
 
 for epoch in range(10):
+    print("[+] Training...")
     loss = train(train_dataloader)
+    print(loss)
     # val_f1 = eval(val_dataloader)
     # print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Val: {val_f1:.4f}')

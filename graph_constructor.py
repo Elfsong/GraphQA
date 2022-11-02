@@ -77,10 +77,11 @@ class ConstituencyGraphConstructor(GraphConstructor):
         self.Y = defaultdict(list)
         self.R = defaultdict(list)
     
-    def virtualize(self, graph_data):
+    def virtualize(self, index, graph_data):
         G = torch_geometric.utils.to_networkx(graph_data.to_homogeneous(), to_undirected=False )
+        plt.figure(figsize=(100,100))
         nx.draw_networkx(G)
-        plt.savefig("output.jpg")
+        plt.savefig(f"output_{index}.jpg")
 
     def construct_context(self, current_node, parent_node, answers):
         if not current_node.is_leaf():
@@ -150,6 +151,8 @@ class ConstituencyGraphConstructor(GraphConstructor):
                 head, tail = relation.split("=")
                 graph_data[head, 'connect', tail].edge_index = torch.tensor(self.R[relation]).t().contiguous()
 
+            # Augmentation
+
             # Convert the graph to undirected graph
             graph_data = T.ToUndirected()(graph_data)
             
@@ -162,7 +165,8 @@ class ConstituencyGraphConstructor(GraphConstructor):
 if __name__ == "__main__":
     cgc = ConstituencyGraphConstructor("squad", "train", "bert-base-uncased")
 
-    gd = cgc.pipeline([0, 10000])
-    for qid in gd:
+    gds = cgc.pipeline([0, 10])
+    for index, gd in enumerate(gds):
         print(gd)
+        cgc.virtualize(index, gd[0])
 

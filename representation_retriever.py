@@ -16,7 +16,7 @@ class RepresentationRetriever(object):
         # TODO(mingzhe): support multiple models
         assert model_name == 'bert-base-uncased'
 
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name).to(self.device)
 
