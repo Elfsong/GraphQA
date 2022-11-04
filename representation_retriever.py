@@ -20,13 +20,13 @@ class RepresentationRetriever(object):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name).to(self.device)
 
-    @lru_cache(maxsize=64, typed=False)
+    @lru_cache(maxsize=1024, typed=False)
     def get_model_output(self, text: str) -> Any:
         encoded_input = self.tokenizer(text, return_tensors='pt').to(self.device)
         output = self.model(**encoded_input)
         return output
 
-    def get_pooled_representation(self, text: str) -> tensor:
+    def get_pooled_representation_str(self, text: str) -> tensor:
         model_output = self.get_model_output(text)
         pooled_representation = model_output.pooler_output
         return pooled_representation[0].detach()

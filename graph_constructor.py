@@ -8,6 +8,8 @@
 import torch
 import stanza
 import pickle
+import numpy as np
+import editdistance
 import networkx as nx
 import torch_geometric
 import matplotlib.pyplot as plt
@@ -60,11 +62,7 @@ class GraphConstructor(object):
         raise NotImplementedError
 
 class ConstituencyGraphConstructor(GraphConstructor):
-    def __init__(self, dataset_name: str, dataset_split_name: str, representation_model: str) -> None:
-        super().__init__(dataset_name, dataset_split_name)
-        # Data Split
-        self.dataset_split_name = dataset_split_name
-
+    def __init__(self, representation_model: str = "bert-base-uncased") -> None:
         # Representation Retriever
         self.r_retriever = RepresentationRetriever(representation_model)
 
@@ -73,29 +71,38 @@ class ConstituencyGraphConstructor(GraphConstructor):
 
         # MetaData
         self.metadata = (
-            ['context'], 
-            [
-                ('context', 'connect', 'context')
-            ]
+            ['context'], [('context', 'connect', 'context')]
         )
     
     def set_temporary_variables(self):
         self.X = defaultdict(list)
         self.Y = defaultdict(list)
+        self.T = defaultdict(list)
         self.R = defaultdict(list)
 
-    def construct_context(self, current_node, parent_node, answers):
+    def construct_context(self, current_node, parent_node, answer_candidates):
         if not current_node.is_leaf():
             current_label = "context"
-            current_representation = current_node.leaf_labels()        
+            current_span = current_node.leaf_labels()
+            current_representation = self.r_retriever.get_pooled_representation(current_span)
             current_index = len(self.X[current_label])
             
-            self.X[current_label] += [self.r_retriever.get_pooled_representation(current_representation)]
-            self.Y[current_label] += [[1., 0.] if current_representation in answers else [0., 1.]]
+            self.X[current_label] += [current_representation]
+            self.Y[current_label] += [max([self.distance(current_span, answer) for answer in answer_candidates])]
+            self.T[current_label] += [(current_span, current_representation)]
             self.R[f"{current_label}={parent_node[0]}"] += [[current_index, parent_node[1]]]
             
             for child_node in current_node.children:
-                self.construct_context(child_node, [current_label, current_index], answers)
+                self.construct_context(child_node, [current_label, current_index], answer_candidates)
+
+    def distance(self, source, target):
+        # distance = editdistance.eval(source, target)
+        d = 1 if source == target else 0
+        return d
+    
+    def distance_normalize(self, data):
+        data = np.array(data)
+        return (data - np.min(data)) / (np.max(data) - np.min(data))
 
     def construct(self, data):
         context = data["context"]
@@ -106,15 +113,20 @@ class ConstituencyGraphConstructor(GraphConstructor):
         self.set_temporary_variables()
         
         # Context Graph
-        self.X["context"] += [self.r_retriever.get_pooled_representation([])]
-        self.Y["context"] += [[0., 1.]]
+        current_reresentation = self.r_retriever.get_pooled_representation_str(context)
+        self.X["context"] += [current_reresentation]
+        self.Y["context"] += [max(self.distance(context, answer) for answer in answers)]
+        self.T["context"] += [(context, current_reresentation)]
 
-        for sentence_index, sentence in enumerate(self.c_parser.get_sentences(context)):
-            answer_candidates = [self.c_parser.get_answer(answer) for answer in answers]
+        answer_candidates = [self.c_parser.get_answer(answer) for answer in answers]
+
+        for sentence_index, sentence in enumerate(self.c_parser.get_sentences(context)):       
             current_index = len(self.X["context"])
-
-            self.X["context"] += [self.r_retriever.get_pooled_representation(sentence.constituency.leaf_labels())]
-            self.Y["context"] += [[1., 0.] if sentence.constituency.leaf_labels() in answer_candidates else [0., 1.]]
+            current_span = sentence.constituency.leaf_labels()
+            current_reresentation = self.r_retriever.get_pooled_representation(current_span)
+            self.X["context"] += [current_reresentation]
+            self.Y["context"] += [max([self.distance(context, answer) for answer in answer_candidates])]
+            self.T["context"] += [(current_span, current_reresentation)]
             self.R["context=context"] += [[current_index, 0]]
             self.construct_context(sentence.constituency, ("context", current_index), answer_candidates)
 
@@ -122,18 +134,26 @@ class ConstituencyGraphConstructor(GraphConstructor):
 
         for label in self.X:
             graph_data[label].x = torch.stack(self.X[label])
-        
+
         for label in self.Y:
-            graph_data[label].y = torch.tensor(self.Y[label])
+            graph_data[label].y = torch.tensor(self.distance_normalize(self.Y[label]))
         
         for relation in self.R:
             head, tail = relation.split("=")
             graph_data[head, 'connect', tail].edge_index = torch.tensor(self.R[relation]).t().contiguous()
 
+        positive_candidates, negative_candidates = list(), list()
+        for spans in self.T["context"]:
+            for answer in answer_candidates:
+                if answer == spans[0]:
+                    positive_candidates += [spans]
+                else:
+                    negative_candidates += [spans]
+
         # Augmentation
-        # graph_data = T.ToUndirected()(graph_data)
+        graph_data = T.ToUndirected()(graph_data)
         
-        instance = [graph_data, {"qid": qid, "context": context, "question": question, "answers": answers}]
+        instance = [graph_data, {"qid": qid, "context": context, "question": question, "answers": answers, "positive_candidates": positive_candidates, "negative_candidates": negative_candidates}]
         return instance
 
     def pipeline(self, range: List[int]) -> list:

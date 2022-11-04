@@ -1,7 +1,13 @@
-import os.path as osp
+# coding: utf-8
+
+# ----------------------------------------------------------------
+# Author:   Du Mingzhe (mingzhe@nus.edu.sg)
+# Date:     29/10/2022
+# ---------------------------------------------------------------- 
 
 import torch
 import torch.nn.functional as F
+from transformers import BertTokenizer, BertModel
 from torch_geometric.nn import GATConv, Linear, HGTConv
 
 # Pytorch Geometric provides three ways for the user to create models on heterogeneous graph data:
@@ -13,22 +19,6 @@ from torch_geometric.nn import GATConv, Linear, HGTConv
 # 3) Deploy existing (or write your own) heterogeneous GNN operators.
 
 # More on https://pytorch-geometric.readthedocs.io/en/latest/notes/heterogeneous.html
-
-class GraphQAModel(torch.nn.Module):
-    def __init__(self, num_features: int = 768, num_classes: int = 2):
-        super().__init__()
-        self.conv1 = GATConv(num_features, 256, heads=4)
-        self.lin1 = torch.nn.Linear(num_features, 4 * 256)
-        self.conv2 = GATConv(4 * 256, 256, heads=4)
-        self.lin2 = torch.nn.Linear(4 * 256, 4 * 256)
-        self.conv3 = GATConv(4 * 256, num_classes, heads=6, concat=False)
-        self.lin3 = torch.nn.Linear(4 * 256, num_classes)
-
-    def forward(self, x, edge_index):
-        x = F.elu(self.conv1(x, edge_index) + self.lin1(x))
-        x = F.elu(self.conv2(x, edge_index) + self.lin2(x))
-        x = self.conv3(x, edge_index) + self.lin3(x)
-        return x
 
 class GAT(torch.nn.Module):
     def __init__(self, hidden_channels, out_channels):
@@ -67,3 +57,21 @@ class HGT(torch.nn.Module):
             x_dict = conv(x_dict, edge_index_dict)
 
         return self.lin(x_dict['context'])
+
+class GraphQA(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.bert_model = BertModel.from_pretrained('bert-base-uncased')
+        self.linear = Linear(in_channels=768, out_channels=2)
+
+        self.linear1 = torch.nn.Linear(768, 1) 
+        self.relu_1 = torch.nn.ReLU()
+        self.dropout = torch.nn.dropout(p=0.1)
+
+    def forward(self, input_ids, attention_mask):
+        output = self.bert_model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
+        output = output["pooler_output"]
+        output = self.linear1(output)
+        output = self.relu_1(output)
+        output = self.dropout(output)
+        return torch.sigmoid(output)
