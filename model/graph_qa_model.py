@@ -66,12 +66,10 @@ class GraphQA(torch.nn.Module):
 
         self.linear1 = torch.nn.Linear(768, 1) 
         self.relu_1 = torch.nn.ReLU()
-        self.dropout = torch.nn.dropout(p=0.1)
 
     def forward(self, input_ids, attention_mask):
         output = self.bert_model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
         output = output["pooler_output"]
         output = self.linear1(output)
         output = self.relu_1(output)
-        output = self.dropout(output)
         return torch.sigmoid(output)
