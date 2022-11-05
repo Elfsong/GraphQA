@@ -54,9 +54,10 @@ class GraphQADataset():
 
 
 class SquadDataset(Dataset):
-    def __init__(self, split, size, load=False):
+    def __init__(self, split, size, load=False, size_from=0):
         self.split = split
         self.size = size
+        self.size_from = size_from
         self.collection = list()
 
         if load:
@@ -70,7 +71,7 @@ class SquadDataset(Dataset):
     def build(self):
         print(f"[+] Building {self.split} dataset...")
         count = 0
-        for instance in tqdm(list(self.dataset)[:self.size]):
+        for instance in tqdm(list(self.dataset)[self.size_from:self.size]):
             qid = instance["id"]
             context = instance["context"]
             question = instance["question"]
@@ -110,7 +111,6 @@ class SquadDataset(Dataset):
         for path in tqdm(Path(f"./data/{self.split}").glob("*.pkl")):
             with open(path, 'rb') as dump_file:
                 instance = pickle.load(dump_file)
-                print(instance["label"])
                 self.collection += [instance] 
 
     def __getitem__(self, idx):

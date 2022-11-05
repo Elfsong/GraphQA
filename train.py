@@ -23,10 +23,10 @@ from transformers import BertTokenizer
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = GraphQA().to(device)
 loss_op = torch.nn.BCELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
-train_dataset = SquadDataset(split="train", size=100, load=False)
-val_dataset = SquadDataset(split="validation", size=10, load=False)
+train_dataset = SquadDataset(split="train", size=20000, load=True, size_from=20000)
+val_dataset = SquadDataset(split="validation", size=500, load=True)
 
 train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
@@ -49,6 +49,10 @@ def train(train_dataloader):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
+        if index % 500 == 0:
+            print(f"[+] Evaluating at step {index}...")
+            eval(val_dataloader)
         
     print(total_loss / len(train_dataloader))
 
@@ -83,5 +87,5 @@ for epoch in range(5):
 
     print("[+] Evaluating...")
     eval(val_dataloader)
-
+    
     print(f"============== Epoch {epoch} finished ==============")
