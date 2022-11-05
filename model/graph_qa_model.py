@@ -6,8 +6,7 @@
 # ---------------------------------------------------------------- 
 
 import torch
-import torch.nn.functional as F
-from transformers import BertTokenizer, BertModel
+from transformers import BertModel
 from torch_geometric.nn import GATConv, Linear, HGTConv
 
 # Pytorch Geometric provides three ways for the user to create models on heterogeneous graph data:
@@ -59,13 +58,26 @@ class HGT(torch.nn.Module):
         return self.lin(x_dict['context'])
 
 class GraphQA(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, metadata, num_layers, num_heads):
         super().__init__()
+        # Backbone model
         self.bert_model = BertModel.from_pretrained('bert-base-uncased')
+
+        # MLP Layers
         self.linear_1 = torch.nn.Linear(768*2, 768) 
         self.relu_1 = torch.nn.ReLU()
         self.linear_2 = torch.nn.Linear(768, 1) 
         self.relu_2 = torch.nn.ReLU()
+
+        # Heterogeneous Graph Transformer
+        self.lin_dict = torch.nn.ModuleDict()
+        for node_type in metadata[0]:
+            self.lin_dict[node_type] = Linear(-1, 768)
+        self.convs = torch.nn.ModuleList()
+        for _ in range(num_layers):
+            conv = HGTConv(768, 768, metadata, num_heads, group='sum')
+            self.convs.append(conv)
+        self.lin = Linear(768, 768)
 
     def forward(self, input_ids, attention_mask, answer_embedding):
         output = self.bert_model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)

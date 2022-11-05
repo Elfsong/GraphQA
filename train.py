@@ -21,7 +21,12 @@ from transformers import BertTokenizer
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = GraphQA().to(device)
+model = GraphQA(
+    metadata=(['context'], [('context', 'connect', 'context')]),
+    num_layers=2,
+    num_heads=2
+).to(device)
+
 loss_op = torch.nn.BCELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
@@ -54,7 +59,7 @@ def train(train_dataloader):
             print(f"[+] Evaluating at step {index}...")
             eval(val_dataloader)
         
-    print(total_loss / len(train_dataloader))
+    print(f"[-] Loss: {total_loss / len(train_dataloader)}")
 
 @torch.no_grad()
 def eval(val_loader):
@@ -78,7 +83,7 @@ def eval(val_loader):
                 total_count += 1
 
     em_score = total_em / (total_count + 1)
-    print(f"EM: {em_score}")
+    print(f"[-] EM: {em_score}")
 
 
 for epoch in range(5):

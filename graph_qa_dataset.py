@@ -85,7 +85,7 @@ class SquadDataset(Dataset):
 
             for answer_index, answer in enumerate(answers["text"]):
                 for can_index, c in enumerate(candidates):
-                    processed_input = self.tokenizer(f"[CLS] {question} [SEP] {context}", max_length=512, padding="max_length", truncation=True, return_tensors="pt")
+                    processed_input = self.tokenizer(f"[CLS] {question} [SEP] {answer} [SEP] {context}", max_length=512, padding="max_length", truncation=True, return_tensors="pt")
                                         
                     instance = {
                         "qid": f'{qid}_{answer_index}_{can_index}',
