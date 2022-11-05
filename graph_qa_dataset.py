@@ -69,6 +69,7 @@ class SquadDataset(Dataset):
 
     def build(self):
         print(f"[+] Building {self.split} dataset...")
+        count = 0
         for instance in tqdm(list(self.dataset)[:self.size]):
             qid = instance["id"]
             context = instance["context"]
@@ -81,32 +82,36 @@ class SquadDataset(Dataset):
             negative_candidates = graph_instance[1]["negative_candidates"]
             candidates = [[" ".join(pc[0]), pc[1], 1] for pc in positive_candidates] + [[" ".join(nc[0]), nc[1], 0] for nc in sample(negative_candidates, len(positive_candidates))]
 
-            for answer in answers["text"]:
-                for c in candidates:
-                    inputs = self.tokenizer(f"[CLS]{question}[SEP]{context}[SEP]{c[0]}", padding="max_length", truncation=True, max_length=512, return_tensors="pt")
-                    
+            for answer_index, answer in enumerate(answers["text"]):
+                for can_index, c in enumerate(candidates):
+                    processed_input = self.tokenizer(f"[CLS] {question} [SEP] {context}", max_length=512, padding="max_length", truncation=True, return_tensors="pt")
+                                        
                     instance = {
-                        "qid": qid,
+                        "qid": f'{qid}_{answer_index}_{can_index}',
                         "context": context,
                         "question": question,
                         "answer": answer,
-                        "input_ids": inputs["input_ids"].squeeze(),
-                        "attention_mask": inputs["attention_mask"].squeeze(),
+                        "input_ids": processed_input["input_ids"].squeeze(),
+                        "input_attention_mask": processed_input["attention_mask"].squeeze(),
                         "answer_embedding": c[1],
                         "label": torch.tensor(c[2])
                     }
                     self.collection += [instance]
                     self.dump(instance)
-
+                    count += 1
+        print(f"Create {count} instances")
+            
     def dump(self, data):
-        with open(f'./data/{self.split}/{data["qid"]}.pkl', 'wb') as dump_file:
+        with open(f"./data/{self.split}/{data['qid']}.pkl", 'wb') as dump_file:
             pickle.dump(data, dump_file)
     
     def load(self):
         print(f"[+] Loading {self.split} dataset...")
         for path in tqdm(Path(f"./data/{self.split}").glob("*.pkl")):
             with open(path, 'rb') as dump_file:
-                self.collection += [pickle.load(dump_file)] 
+                instance = pickle.load(dump_file)
+                print(instance["label"])
+                self.collection += [instance] 
 
     def __getitem__(self, idx):
         return self.collection[idx]

@@ -5,6 +5,10 @@
 # Date:     29/10/2022
 # ---------------------------------------------------------------- 
 
+# Logging configuration
+import logging
+logging.basicConfig(level='ERROR')
+
 import torch
 from tqdm import tqdm
 from datasets import load_dataset
@@ -15,27 +19,16 @@ from torch_geometric.loader import DataListLoader
 from model.graph_qa_model import GAT, HGT, GraphQA
 from transformers import BertTokenizer
 
-# # Dataset Instance
-# train_dataset = GraphQADataset(split="train")
-# val_dataset = GraphQADataset(split="validation")
-
-# # Load Dataset from files
-# train_dataset.load()
-# val_dataset.load()
-
-# # Construct Dataloader
-# train_dataloader = DataListLoader(train_dataset, batch_size=2, shuffle=True)
-# val_dataloader = DataListLoader(val_dataset, batch_size=1, shuffle=False)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = GraphQA().to(device)
 loss_op = torch.nn.BCELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-6)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
 
-train_dataset = SquadDataset(split="train", size=1000, load=True)
-val_dataset = SquadDataset(split="validation", size=10, load=True)
+train_dataset = SquadDataset(split="train", size=100, load=False)
+val_dataset = SquadDataset(split="validation", size=10, load=False)
 
-train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -45,11 +38,12 @@ def train(train_dataloader):
     total_loss = 0
     for index, batch in tqdm(enumerate(train_dataloader)):
         input_ids = batch["input_ids"].to(device, dtype=torch.long)
-        attention_mask = batch["attention_mask"].to(device, dtype=torch.long)
+        attention_mask = batch["input_attention_mask"].to(device, dtype=torch.long)
         label = batch["label"].to(device, dtype=torch.long)
-        pred = model(input_ids, attention_mask)
+
+        answer_embedding = batch["answer_embedding"].to(device, dtype=torch.long)
+        pred = model(input_ids, attention_mask, answer_embedding)
         loss = loss_op(pred, label.reshape(-1,1).float())
-        print(loss)
         total_loss += loss
 
         optimizer.zero_grad()
@@ -68,17 +62,18 @@ def eval(val_loader):
     with torch.no_grad():
         for index, batch in tqdm(enumerate(val_dataloader)):
             input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
+            attention_mask = batch["input_attention_mask"].to(device)
             labels = batch["label"].to(device)
+            answer_embedding = batch["answer_embedding"].to(device, dtype=torch.long)
+            preds = model(input_ids, attention_mask, answer_embedding)
 
-            preds = model(input_ids, attention_mask)
-            print(preds)
+            for gt_label, pred in zip(labels, preds):
+                pred_label = 1 if pred > 0.5 else 0
+                if pred_label == gt_label:
+                    total_em += 1
+                total_count += 1
 
-            for label, pred in zip(labels, preds):
-                print(label)
-                print(pred)
-
-    em_score = total_em / total_count
+    em_score = total_em / (total_count + 1)
     print(f"EM: {em_score}")
 
 
@@ -86,5 +81,7 @@ for epoch in range(5):
     print("[+] Training...")
     train(train_dataloader)
 
-    # print("[+] Evaluating...")
-    # eval(val_dataloader)
+    print("[+] Evaluating...")
+    eval(val_dataloader)
+
+    print(f"============== Epoch {epoch} finished ==============")

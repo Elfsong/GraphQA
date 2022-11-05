@@ -62,14 +62,15 @@ class GraphQA(torch.nn.Module):
     def __init__(self):
         super().__init__()
         self.bert_model = BertModel.from_pretrained('bert-base-uncased')
-        self.linear = Linear(in_channels=768, out_channels=2)
-
-        self.linear1 = torch.nn.Linear(768, 1) 
+        self.linear_1 = torch.nn.Linear(768*2, 768) 
         self.relu_1 = torch.nn.ReLU()
+        self.linear_2 = torch.nn.Linear(768, 1) 
+        self.relu_2 = torch.nn.ReLU()
 
-    def forward(self, input_ids, attention_mask):
+    def forward(self, input_ids, attention_mask, answer_embedding):
         output = self.bert_model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
         output = output["pooler_output"]
-        output = self.linear1(output)
+        output = self.linear_1(torch.cat((output, answer_embedding), 1))
         output = self.relu_1(output)
+        output = self.linear_2(output)
         return torch.sigmoid(output)

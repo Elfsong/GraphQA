@@ -22,19 +22,19 @@ class RepresentationRetriever(object):
 
     @lru_cache(maxsize=1024, typed=False)
     def get_model_output(self, text: str) -> Any:
-        encoded_input = self.tokenizer(text, return_tensors='pt').to(self.device)
-        output = self.model(**encoded_input)
-        return output
+        encoded_input = self.tokenizer(text, max_length=64, padding="max_length", truncation=True,return_tensors='pt').to(self.device)
+        model_output = self.model(**encoded_input)
+        pooled_representation = model_output.pooler_output
+        result = pooled_representation[0].detach()
+        return result
 
     def get_pooled_representation_str(self, text: str) -> tensor:
         model_output = self.get_model_output(text)
-        pooled_representation = model_output.pooler_output
-        return pooled_representation[0].detach()
+        return model_output
 
     def get_pooled_representation(self, token_list: list) -> tensor:
         model_output = self.get_model_output(" ".join(token_list))
-        pooled_representation = model_output.pooler_output
-        return pooled_representation[0].detach()
+        return model_output
 
 
 # Unit tests
