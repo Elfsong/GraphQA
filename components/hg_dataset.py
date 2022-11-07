@@ -4,9 +4,10 @@
 # Author:   Du Mingzhe (mingzhe@nus.edu.sg)
 # Date:     07/11/2022
 # ---------------------------------------------------------------- 
+
 import json
-import hg_utils
-from tqdm import tqdm
+from . import hg_utils
+from typing import Any
 from pathlib import Path
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
@@ -39,15 +40,15 @@ class HGDataset(Dataset):
             hg_utils.logger.info(f"[+] processing instances from {self.source_path} in range of [{self.start_index}:{self.end_index}]")
             self.process()
     
-    def dump(self):
+    def dump(self) -> None:
         #TODO(mingzhe): implement it
         raise NotImplementedError
     
-    def load(self):
+    def load(self) -> None:
         #TODO(mingzhe): implement it
         raise NotImplementedError
 
-    def process(self):
+    def process(self) -> None:
         # Load raw data from the given path
         with open(self.source_path, "r") as source_file:
             raw_data = json.load(source_file)["data"]
@@ -62,18 +63,18 @@ class HGDataset(Dataset):
         self.data_collection = hg_utils.calculate_token_position(self.tokenizer, self.data_collection)
         hg_utils.logger.info(f"[-] Convert the features to squad data format successfully!")
     
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Any:
         return self.data_collection[idx]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data_collection)
 
 
 # Unit test
 if __name__ == "__main__":
     # 1. Create a new dataset
-    source_path = Path("./data/squad_v2/raw/dev-v2.0.json")
-    target_path = Path("./data/squad_v2/processed/dev/")
+    source_path = hg_utils.get_path("./data/squad_v2/raw/dev-v2.0.json")
+    target_path = hg_utils.get_path("./data/squad_v2/processed/dev/")
     train_dataset = HGDataset(source_path=source_path, target_path=target_path, start_index=0, end_index=-1, using_cache=False)
 
 

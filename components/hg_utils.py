@@ -7,6 +7,8 @@
 
 import logging
 from tqdm import tqdm
+from typing import Any, List
+from pathlib import Path
 
 # Logging Configuration
 logging.basicConfig(
@@ -16,8 +18,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger()
 
+def get_path(path: str) -> Path:
+    assert path
+    return Path(path)
+
 # Squad Raw Dara Process
-def raw_data_process(raw_data):
+def raw_data_process(raw_data: List) -> List:
     data_collection = list()
     for article in tqdm(raw_data):
         title = article["title"]
@@ -48,7 +54,7 @@ def raw_data_process(raw_data):
     return data_collection
 
 # Calculate answer token position
-def calculate_token_position(tokenizer, data_collection):
+def calculate_token_position(tokenizer: Any, data_collection: List) -> List:
     new_data_collection = list()
     for data in tqdm(data_collection):
         question = data["question"]
