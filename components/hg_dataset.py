@@ -31,7 +31,7 @@ class HGDataset(Dataset):
         # Processed Data Collection
         self.data_collection = list()
 
-        # Processing or Loading
+        # Processing from scratch / Loading from cache
         if self.using_cache:
             hg_utils.logger.info(f"[+] Loading cache from {self.target_path}")
             self.load()
@@ -40,10 +40,12 @@ class HGDataset(Dataset):
             self.process()
     
     def dump(self):
-        pass
+        #TODO(mingzhe): implement it
+        raise NotImplementedError
     
     def load(self):
-        pass
+        #TODO(mingzhe): implement it
+        raise NotImplementedError
 
     def process(self):
         # Load raw data from the given path
