@@ -62,14 +62,19 @@ class GraphQA(torch.nn.Module):
         super().__init__()
         # Backbone model
         self.bert_model = BertModel.from_pretrained('bert-base-uncased')
-        for name, param in self.bert_model.parameters():
-            param.requires_grad = False
+        # unfreeze_layer = ["pooler", "out"]
+        # for name, param in self.bert_model.named_parameters():
+        #     param.requires_grad = False
+        #     for ele in unfreeze_layer:
+        #         if ele in name:
+        #             param.requires_grad = True
 
         # MLP Layers
-        self.linear_1 = torch.nn.Linear(768, 512) 
+        self.linear_1 = torch.nn.Linear(768*2, 256) 
         self.relu_1 = torch.nn.ReLU()
-        self.linear_2 = torch.nn.Linear(512, 1) 
+        self.linear_2 = torch.nn.Linear(256, 1) 
         self.relu_2 = torch.nn.ReLU()
+        self.dropout = torch.nn.Dropout(0.3)
 
         # Heterogeneous Graph Transformer
         self.lin_dict = torch.nn.ModuleDict()
@@ -83,8 +88,9 @@ class GraphQA(torch.nn.Module):
 
     def forward(self, input_ids, attention_mask, answer_embedding):
         output = self.bert_model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
-        output = output["pooler_output"]
-        output = self.linear_1(output)
+        output = output[1]
+        output = self.dropout(output)
+        output = self.linear_1(torch.cat((output, answer_embedding), 1))
         output = self.relu_1(output)
         output = self.linear_2(output)
         return torch.sigmoid(output)

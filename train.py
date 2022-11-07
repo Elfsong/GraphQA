@@ -5,10 +5,6 @@
 # Date:     29/10/2022
 # ---------------------------------------------------------------- 
 
-# Logging configuration
-import logging
-logging.basicConfig(level='ERROR')
-
 import torch
 from tqdm import tqdm
 from datasets import load_dataset
@@ -19,24 +15,22 @@ from torch_geometric.loader import DataListLoader
 from model.graph_qa_model import GAT, HGT, GraphQA
 from transformers import BertTokenizer
 
-
+# Model Loading
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = GraphQA(
     metadata=(['context'], [('context', 'connect', 'context')]),
     num_layers=2,
     num_heads=2
 ).to(device)
-
-loss_op = torch.nn.BCELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-
-train_dataset = SquadDataset(split="train", size=20000, load=True, size_from=20000)
-val_dataset = SquadDataset(split="validation", size=500, load=True)
-
-train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
-
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+loss_op = torch.nn.MSELoss()
+
+# Data loading
+train_dataset = SquadDataset(split="train", size=4000, load=False, size_from=0)
+val_dataset = SquadDataset(split="validation", size=1000, load=False)
+train_dataloader = DataLoader(train_dataset, batch_size=24, shuffle=True)
+val_dataloader = DataLoader(val_dataset, batch_size=4, shuffle=False)
 
 def train(train_dataloader):
     model.train()
@@ -56,25 +50,29 @@ def train(train_dataloader):
         optimizer.step()
 
         if index % 500 == 0:
+            print(f"Current loss: {loss}")
             print(f"[+] Evaluating at step {index}...")
             eval(val_dataloader)
         
     print(f"[-] Loss: {total_loss / len(train_dataloader)}")
 
 @torch.no_grad()
-def eval(val_loader):
+def eval(val_dataloader):
     model.eval()
 
     total_count = 0
     total_em = 0
     
     with torch.no_grad():
-        for index, batch in tqdm(enumerate(val_dataloader)):
+        for index, batch in enumerate(val_dataloader):
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["input_attention_mask"].to(device)
             labels = batch["label"].to(device)
             answer_embedding = batch["answer_embedding"].to(device, dtype=torch.long)
             preds = model(input_ids, attention_mask, answer_embedding)
+
+            loss = loss_op(labels, preds)
+            # print(labels, preds, loss)
 
             for gt_label, pred in zip(labels, preds):
                 pred_label = 1 if pred > 0.5 else 0
