@@ -21,7 +21,7 @@ from functools import lru_cache
 from datasets import load_dataset
 from collections import defaultdict
 from torch_geometric.data import HeteroData
-from representation_retriever import RepresentationRetriever
+from achieve.representation_retriever import RepresentationRetriever
 
 
 class ConstituencyParser(object):

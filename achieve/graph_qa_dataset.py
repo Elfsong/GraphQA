@@ -15,7 +15,7 @@ from random import sample
 from datasets import load_dataset
 from torch.utils.data import Dataset
 from transformers import BertTokenizer
-from graph_constructor import ConstituencyGraphConstructor
+from achieve.graph_constructor import ConstituencyGraphConstructor
 
 class GraphQADataset():
     def __init__(self, split: str = 'train', data_range: List[int] = [0, -1]):

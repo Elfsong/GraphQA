@@ -9,7 +9,7 @@ import time
 import argparse
 import numpy as np
 from multiprocessing import Pool
-from graph_qa_dataset import GraphQADataset
+from achieve.graph_qa_dataset import GraphQADataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--worker_num', type=int, required=True, help='worker num [CHANGE IT] with the trade off of speed and GPU capacity')
