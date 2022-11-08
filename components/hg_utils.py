@@ -5,10 +5,12 @@
 # Date:     07/11/2022
 # ---------------------------------------------------------------- 
 
+import torch
 import logging
 from tqdm import tqdm
-from typing import Any, List
 from pathlib import Path
+from typing import Any, List
+
 
 # Logging Configuration
 logging.basicConfig(
@@ -75,6 +77,7 @@ def calculate_token_position(tokenizer: Any, data_collection: List) -> List:
             truncation="only_second",
             return_offsets_mapping=True,
             return_overflowing_tokens=True,
+            return_tensors="pt",
         )
 
         for i, offset in enumerate(inputs["offset_mapping"]):
@@ -105,8 +108,8 @@ def calculate_token_position(tokenizer: Any, data_collection: List) -> List:
                 end_position = idx + 1
             
             # Get start and end positions for each sample
-            data["token_start_position"] = start_position
-            data["end_position"] = end_position
+            data["start_position"] = torch.tensor([start_position])
+            data["end_position"] = torch.tensor([end_position])
 
             # Generate truncated context for the further constituency grpah construction
             # Sequence obey the template "[CLS] {question} [SEP] {part of context} [SEP]", so 'sequence.split("[SEP]")[1]' can capture the current part of context.
@@ -114,9 +117,9 @@ def calculate_token_position(tokenizer: Any, data_collection: List) -> List:
             data["context"] = sequence.split("[SEP]")[1]
 
             # Add tokenization info to the data instance
-            data["input_ids"] = inputs["input_ids"][i]
-            data["token_type_ids"] = inputs["token_type_ids"][i]
-            data["attention_mask"] = inputs["attention_mask"][i]
+            data["input_ids"] = inputs["input_ids"][i].squeeze()
+            data["token_type_ids"] = inputs["token_type_ids"][i].squeeze()
+            data["attention_mask"] = inputs["attention_mask"][i].squeeze()
 
             new_data_collection += [data]
     return new_data_collection

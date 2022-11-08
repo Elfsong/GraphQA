@@ -7,27 +7,27 @@
 
 import json
 from . import hg_utils
-from typing import Any
 from pathlib import Path
+from typing import Any, Tuple
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
 
 class HGDataset(Dataset):
-    def __init__(self, source_path: Path = None, target_path: Path = None, start_index: int = 0, end_index: int = -1, using_cache: bool = False, tokenizer_name: str = "bert-base-uncased") -> None:
+    def __init__(self, source_path: Path = None, target_path: Path = None, range_index: Tuple[int, int] = (0,1), using_cache: bool = False, tokenizer: Any = None) -> None:
+        super().__init__()
         # Raw data source (Pathlib Path)
         self.source_path = source_path
         self.target_path = target_path
 
         # Data read indexes
-        self.start_index = start_index
-        self.end_index = end_index
+        self.start_index, self.end_index = range_index
 
         # Whether using cache or processing from scratch
         self.using_cache = using_cache
 
         # Tokenizer config
-        self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        self.tokenizer = tokenizer
 
         # Processed Data Collection
         self.data_collection = list()
