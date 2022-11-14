@@ -38,21 +38,38 @@ def raw_data_process(raw_data: List) -> List:
                 question = qa["question"]
                 is_impossible = qa["is_impossible"]
                 answers = qa["answers"]
-                for answer in answers:
-                    answer_text = answer["text"]
-                    answer_start = answer["answer_start"]
-                    # The dataset provides us with the start character of the answer in the context, and by adding the length of the answer, we can find the end character in the context.
+                
+                # If answer exists
+                if not is_impossible:
+                    for answer in answers[:1]:
+                        answer_text = answer["text"]
+                        answer_start = answer["answer_start"]
+                        # The dataset provides us with the start character of the answer in the context, and by adding the length of the answer, we can find the end character in the context.
+                        instance = {
+                            "title": title,
+                            "qid": qid,
+                            "question": question,
+                            "context": context,
+                            "is_improssible": is_impossible,
+                            "answer_text": answer_text,
+                            "answer_start": answer_start,
+                            "answer_end": answer_start + len(answer_text),
+                        }
+                        data_collection += [instance]
+                # if answer is impossible
+                else:
                     instance = {
-                        "title": title,
-                        "qid": qid,
-                        "question": question,
-                        "context": context,
-                        "is_improssible": is_impossible,
-                        "answer_text": answer_text,
-                        "answer_start": answer_start,
-                        "answer_end": answer_start + len(answer_text),
-                    }
+                            "title": title,
+                            "qid": qid,
+                            "question": question,
+                            "context": context,
+                            "is_improssible": is_impossible,
+                            "answer_text": "",
+                            "answer_start": 0,
+                            "answer_end": 0,
+                        }
                     data_collection += [instance]
+
     return data_collection
 
 # Calculate answer token position

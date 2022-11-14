@@ -10,7 +10,6 @@ from . import hg_utils
 from pathlib import Path
 from typing import Any, Tuple
 from torch.utils.data import Dataset
-from transformers import AutoTokenizer
 
 
 class HGDataset(Dataset):
