@@ -28,9 +28,12 @@ import argparse
 import numpy as np
 import transformers
 
+from tqdm import tqdm, trange
+from model.graph_qa_model import GraphQA
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
-from tqdm import tqdm, trange
+from components.squad import squad_convert_examples_to_features, SquadResult, SquadV1Processor, SquadV2Processor
+
 
 
 from transformers import (
@@ -41,7 +44,6 @@ from transformers import (
     AutoModelForQuestionAnswering,
     AutoTokenizer,
     get_linear_schedule_with_warmup,
-    squad_convert_examples_to_features,
 )
 from transformers.data.metrics.squad_metrics import (
     compute_predictions_log_probs,
@@ -49,7 +51,6 @@ from transformers.data.metrics.squad_metrics import (
     squad_evaluate,
 )
 from transformers.trainer_utils import is_main_process
-from transformers.data.processors.squad import SquadResult, SquadV1Processor, SquadV2Processor
 
 
 try:
@@ -58,8 +59,8 @@ except ImportError:
     from tensorboardX import SummaryWriter
 
 # Device Config
-os.environ["CUDA_VISIBLE_DEVICES"]="1,2"
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 
 logger = logging.getLogger(__name__)
@@ -117,14 +118,6 @@ def train(args, train_dataset, model, tokenizer):
         optimizer.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "optimizer.pt")))
         scheduler.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "scheduler.pt")))
 
-    if args.fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
-
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
-
     # multi-gpu training (should be after apex fp16 initialization)
     if args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
@@ -140,8 +133,7 @@ def train(args, train_dataset, model, tokenizer):
     logger.info("  Num examples = %d", len(train_dataset))
     logger.info("  Num Epochs = %d", args.num_train_epochs)
     logger.info("  Instantaneous batch size per GPU = %d", args.per_gpu_train_batch_size)
-    logger.info(
-        "  Total train batch size (w. parallel, distributed & accumulation) = %d",
+    logger.info("  Total train batch size (w. parallel, distributed & accumulation) = %d",
         args.train_batch_size
         * args.gradient_accumulation_steps
         * (torch.distributed.get_world_size() if args.local_rank != -1 else 1),
@@ -217,18 +209,11 @@ def train(args, train_dataset, model, tokenizer):
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
 
-            if args.fp16:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+            loss.backward()
 
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
-                if args.fp16:
-                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
-                else:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
                 optimizer.step()
                 scheduler.step()  # Update learning rate schedule
@@ -437,16 +422,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
         logger.info("Creating features from dataset file at %s", input_dir)
 
         if not args.data_dir and ((evaluate and not args.predict_file) or (not evaluate and not args.train_file)):
-            try:
-                import tensorflow_datasets as tfds
-            except ImportError:
-                raise ImportError("If not data_dir is specified, tensorflow_datasets needs to be installed.")
-
-            if args.version_2_with_negative:
-                logger.warning("tensorflow_datasets does not handle version 2 of SQuAD.")
-
-            tfds_examples = tfds.load("squad")
-            examples = SquadV1Processor().get_examples_from_dataset(tfds_examples, evaluate=evaluate)
+            raise ImportError("data_dir / predict_file / train_file should be defined.")
         else:
             processor = SquadV2Processor() if args.version_2_with_negative else SquadV1Processor()
             if evaluate:
@@ -749,9 +725,9 @@ def main():
         cache_dir=args.cache_dir if args.cache_dir else None,
         use_fast=False,  # SquadDataset is not compatible with Fast tokenizers which have a smarter overflow handeling
     )
-    model = AutoModelForQuestionAnswering.from_pretrained(
+
+    model = GraphQA.from_pretrained(
         args.model_name_or_path,
-        from_tf=bool(".ckpt" in args.model_name_or_path),
         config=config,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
@@ -763,17 +739,6 @@ def main():
     model.to(args.device)
 
     logger.info("Training/evaluation parameters %s", args)
-
-    # Before we do anything with models, we want to ensure that we get fp16 execution of torch.einsum if args.fp16 is set.
-    # Otherwise it'll default to "promote" mode, and we'll get fp32 operations. Note that running `--fp16_opt_level="O2"` will
-    # remove the need for this code, but it is still valid.
-    if args.fp16:
-        try:
-            import apex
-
-            apex.amp.register_half_function(torch, "einsum")
-        except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
 
     # Training
     if args.do_train:
@@ -795,7 +760,7 @@ def main():
         torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = AutoModelForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
+        model = GraphQA.from_pretrained(args.output_dir)
 
         # SquadDataset is not compatible with Fast tokenizers which have a smarter overflow handeling
         # So we use use_fast=False here for now until Fast-tokenizer-compatible-examples are out
@@ -813,21 +778,22 @@ def main():
                     os.path.dirname(c)
                     for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
                 )
-
         else:
             logger.info("Loading checkpoint %s for evaluation", args.model_name_or_path)
             checkpoints = [args.model_name_or_path]
-
+        
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
 
         for checkpoint in checkpoints:
             # Reload the model
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
-            model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
+            model = GraphQA.from_pretrained(checkpoint)
             model.to(args.device)
 
             # Evaluate
             result = evaluate(args, model, tokenizer, prefix=global_step)
+            
+            logger.info("results: {}".format(result))
 
             result = dict((k + ("_{}".format(global_step) if global_step else ""), v) for k, v in result.items())
             results.update(result)

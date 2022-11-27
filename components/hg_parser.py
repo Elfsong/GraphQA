@@ -10,8 +10,8 @@ from typing import List
 from functools import lru_cache
 
 class ConstituencyParser(object):
-    def __init__(self):
-        self.pipeline = stanza.Pipeline(lang='en', processors='tokenize,pos,constituency')
+    def __init__(self, use_gpu=False):
+        self.pipeline = stanza.Pipeline(lang='en', processors='tokenize,pos,constituency', use_gpu=use_gpu)
 
     @lru_cache(maxsize=64, typed=False)
     def get_sentences(self, doc: str) -> List:
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     for i in range(10):
         text = "The Norman's dynasty had a major political, cultural and military impact on medieval Europe and even the Near East."
         result = cp.get_sentences(text)
-        print(result)
+        print(result[0].constituency)
 
     
 

@@ -8,3 +8,4 @@ cached_train_bert-base-uncased_384
 runs/*
 tmp/*
 exp/
+bert_fine_tuned_model/*
