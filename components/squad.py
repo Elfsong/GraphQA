@@ -436,15 +436,51 @@ def squad_convert_examples_to_features(
     # Stanford NLP Parser doesn‘t support multiprocessing mode, so that we need to operate it with the single track.
     c_parser = ConstituencyParser()
 
+
+
     for feature in tqdm(features, desc="constituency graph construction"):
-        # token2token feature mapping dict
+        # 0) Generate constituency parser
+        # 0.1) Split sentences
+        context = tokenizer.decode(feature.input_ids[feature.sep_index+1:], skip_special_tokens=True)
+        constituents = c_parser.get_sentences(context)
+
+        # 1) token2token feature mapping dict
         token2token_mapping = dict()
         for index, token in enumerate(feature.doc_tokens):
             token2token_mapping[index] = feature.sep_index + index
 
-        # leaf2token feature mapping dict
+        # 2) leaf2token feature mapping dict
+        try:
+            leaf_id = 0
+            last_token_id = feature.sep_index + 1
+            leaf_node_mapping = dict()
 
-        # constituent2token feature mapping dict
+            for constituent in constituents:
+                leaves = constituent.constituency.leaf_labels()
+                for leaf in leaves:
+                    leaf = leaf.lower()
+                    current_token_text = ""
+                    current_token_ids = list()
+                    while current_token_text != leaf:
+                        current_token_text += feature.tokens[last_token_id] if not feature.tokens[last_token_id].startswith("##") else feature.tokens[last_token_id][2:]
+                        current_token_ids += [last_token_id]
+                        last_token_id += 1
+                    leaf_node_mapping[leaf_id] = current_token_ids
+                    leaf_id += 1
+        except:
+            print("Constituents Leaf Parser Failed, Skip This One.")
+
+        
+        # 3) constituent2leaf feature mapping dict
+        try:
+            constituent_id = 0
+            last_leaf_id = 0
+            constituent_node_mapping = dict()
+
+
+        except:
+            print("Constituents Token Parser Failed, Skip This One.")
+        
 
     if return_dataset == "pt":
         if not is_torch_available():
