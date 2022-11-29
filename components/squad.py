@@ -18,7 +18,7 @@ import numpy as np
 from tqdm import tqdm
 from functools import partial
 from multiprocessing import Pool, cpu_count
-from components.hg_parser import ConstituencyParser
+from components.hg_parser import ConstituencyParser, ConstituencyNode
 
 from transformers.data.processors import DataProcessor
 from transformers.utils import is_tf_available, is_torch_available, logging
@@ -473,9 +473,28 @@ def squad_convert_examples_to_features(
         
         # 3) constituent2leaf feature mapping dict
         try:
-            constituent_id = 0
-            last_leaf_id = 0
-            constituent_node_mapping = dict()
+            tid, cid = 0, 100000
+
+            def iterate_tree(root):
+                global tid, cid
+                if root.is_preterminal():
+                    leaf_node = ConstituencyNode(cid=tid, label=root.label, text=root.leaf_labels(), lids=[tid], children=[])
+                    tid += 1
+                    return leaf_node
+                else:
+                    child_nodes = list()
+                    lids = list()
+                    for child in root.children:
+                        child_node = iterate_tree(child)
+                        child_nodes += [child_node]
+                        lids += child_node.lids
+
+                    leaf_node = ConstituencyNode(cid=cid, label=root.label, text=root.leaf_labels(), lids=lids, children=child_nodes)
+                    cid += 1
+                    return leaf_node
+            
+            for constituent in constituents:
+                root = iterate_tree(constituent.children[0])
 
 
         except:

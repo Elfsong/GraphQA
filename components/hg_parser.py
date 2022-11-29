@@ -13,15 +13,16 @@ from functools import lru_cache
 from multiprocessing import Pool
 
 class ConstituencyNode(object):
-    def __init__(self, cid, label, text, lids, children=[]):
+    def __init__(self, cid, label, text, lids, children=[], is_answer=False):
         self.cid = cid
         self.label = label
         self.text = text
         self.lids = lids
         self.children = children
+        self.is_answer = is_answer
     
     def __str__(self):
-        return f"cid: {self.cid} | label: {self.label} | text: {self.text} | lids: {self.lids} | children: {[child.cid for child in self.children]}"
+        return f"cid: {self.cid} | label: {self.label} | text: {self.text} | lids: {self.lids} | children: {[child.cid for child in self.children]} | answer: {self.is_answer}"
 
 class ConstituencyParser(object):
     def __init__(self, use_gpu: bool = True):
