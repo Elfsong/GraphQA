@@ -14,6 +14,7 @@
 
 import os
 import json
+import jsonpickle
 import numpy as np
 from tqdm import tqdm
 from functools import partial
@@ -435,12 +436,13 @@ def squad_convert_examples_to_features(
     # Constituency Graph Construction
     # Stanford NLP Parser doesn‘t support multiprocessing mode, so that we need to operate it with the single track.
     c_parser = ConstituencyParser()
-
-
+    graph_f = open("./data/squad_v2/graph/v1", "w")
 
     for feature in tqdm(features, desc="constituency graph construction"):
-        # 0) Generate constituency parser
-        # 0.1) Split sentences
+        # 0) Meta info
+        start_position = feature.start_position
+        end_position = feature.end_position
+        qas_id = feature.qas_id
         context = tokenizer.decode(feature.input_ids[feature.sep_index+1:], skip_special_tokens=True)
         constituents = c_parser.get_sentences(context)
 
@@ -467,39 +469,65 @@ def squad_convert_examples_to_features(
                         last_token_id += 1
                     leaf_node_mapping[leaf_id] = current_token_ids
                     leaf_id += 1
-        except:
-            print("Constituents Leaf Parser Failed, Skip This One.")
+        except Exception as e:
+            print("Constituents Leaf Parser Failed, Skip this one: {e}")
+            continue
 
-        
         # 3) constituent2leaf feature mapping dict
         try:
-            tid, cid = 0, 100000
+            pid, cid = 0, 1000000000
 
             def iterate_tree(root):
-                global tid, cid
+                nonlocal pid, cid
                 if root.is_preterminal():
-                    leaf_node = ConstituencyNode(cid=tid, label=root.label, text=root.leaf_labels(), lids=[tid], children=[])
-                    tid += 1
+                    tids=leaf_node_mapping[pid]
+                    is_answer = False
+                    if tids[0] == start_position and tids[-1] == end_position:
+                        is_answer = True
+                    leaf_node = ConstituencyNode(cid=pid, label=root.label, text=root.leaf_labels(), lids=[pid], tids=tids, children=[], is_answer=is_answer)
+                    pid += 1
                     return leaf_node
                 else:
                     child_nodes = list()
-                    lids = list()
+                    lids, tids = list(), list()
+
                     for child in root.children:
                         child_node = iterate_tree(child)
                         child_nodes += [child_node]
                         lids += child_node.lids
 
-                    leaf_node = ConstituencyNode(cid=cid, label=root.label, text=root.leaf_labels(), lids=lids, children=child_nodes)
+                        for lid in child_node.lids:
+                            tids += leaf_node_mapping[lid]
+                    
+                    is_answer = False
+                    if tids[0] == start_position and tids[-1] == end_position:
+                        is_answer = True
+
+                    leaf_node = ConstituencyNode(cid=cid, label=root.label, text=root.leaf_labels(), lids=lids, tids=tids, children=child_nodes, is_answer=is_answer)
                     cid += 1
                     return leaf_node
             
+            child_nodes = list()
+            lids, tids = list(), list()
             for constituent in constituents:
-                root = iterate_tree(constituent.children[0])
+                root = iterate_tree(constituent.constituency)
+                child_nodes += [root]
+                lids += root.lids
+                for lid in root.lids:
+                    tids += leaf_node_mapping[lid]
 
+            c_graph_node = ConstituencyNode(cid=cid, label="CONTEXT", text=context, lids=lids, tids=tids, children=child_nodes, is_answer=False)
 
-        except:
-            print("Constituents Token Parser Failed, Skip This One.")
-        
+            # For debugging
+            ConstituencyNode.iterate(c_graph_node)
+
+            graph_f.write(jsonpickle.encode({"qid": qas_id, "graph": c_graph_node}, indent=None))
+
+        except Exception as e:
+            print(f"Constituents Token Parser Failed, Skip This One: {e}")
+            continue
+
+    graph_f.close()
 
     if return_dataset == "pt":
         if not is_torch_available():

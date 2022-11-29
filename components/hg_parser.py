@@ -6,6 +6,7 @@
 # ---------------------------------------------------------------- 
 
 import time
+import json
 import stanza
 from tqdm import tqdm
 from typing import List
@@ -13,16 +14,26 @@ from functools import lru_cache
 from multiprocessing import Pool
 
 class ConstituencyNode(object):
-    def __init__(self, cid, label, text, lids, children=[], is_answer=False):
+    def __init__(self, cid, label, text, lids, tids, children=[], is_answer=False):
         self.cid = cid
         self.label = label
         self.text = text
         self.lids = lids
+        self.tids = tids
         self.children = children
         self.is_answer = is_answer
     
     def __str__(self):
-        return f"cid: {self.cid} | label: {self.label} | text: {self.text} | lids: {self.lids} | children: {[child.cid for child in self.children]} | answer: {self.is_answer}"
+        return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True)
+    
+    def __repr__(self):
+        return self.__str__() 
+
+    @classmethod
+    def iterate(cls, root):
+        print(root)        
+        for child in root.children:
+            ConstituencyNode.iterate(child)
 
 class ConstituencyParser(object):
     def __init__(self, use_gpu: bool = True):
