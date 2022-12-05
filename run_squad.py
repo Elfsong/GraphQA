@@ -392,6 +392,9 @@ def evaluate(args, model, tokenizer, prefix=""):
     results = squad_evaluate(examples, predictions)
     return results
 
+def load_graph(args):
+    pass
+
 
 def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=False):
     if args.local_rank not in [-1, 0] and not evaluate:

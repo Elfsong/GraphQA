@@ -11,7 +11,7 @@ python3 run_squad.py \
     --train_file $SQUAD_DIR/train-v2.0.json \
     --predict_file $SQUAD_DIR/dev-v2.0.json \
     --per_gpu_train_batch_size 32 \
-    --num_train_epochs 1 \
+    --num_train_epochs 10 \
     --learning_rate 3e-5 \
     --max_seq_length 384 \
     --max_steps 200 \
