@@ -14,8 +14,8 @@ python3 run_squad.py \
     --num_train_epochs 2 \
     --learning_rate 3e-5 \
     --max_seq_length 384 \
-    --max_steps 5000 \
     --doc_stride 128 \
     --output_dir bert_fine_tuned_model \
     --overwrite_output_dir \
+    --max_steps 500 \
     # --overwrite_cache

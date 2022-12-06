@@ -16,8 +16,6 @@
 """ Finetuning the library models for question-answering on SQuAD (DistilBERT, Bert, XLM, XLNet)."""
 
 
-
-
 import os
 import glob
 import torch
@@ -25,13 +23,14 @@ import random
 import timeit
 import logging
 import argparse
+import jsonpickle
 import numpy as np
 import transformers
 
 from tqdm import tqdm, trange
 from model.graph_qa_model import GraphQA
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from components.squad import squad_convert_examples_to_features, SquadResult, SquadV1Processor, SquadV2Processor
 # from transformers.data.processors.squad import SquadResult, SquadV1Processor, SquadV2Processor
 # from transformers import squad_convert_examples_to_features
@@ -180,6 +179,9 @@ def train(args, train_dataset, model, tokenizer):
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
 
+            for bid in batch[8]:
+                print(bid)
+
             inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
@@ -261,6 +263,7 @@ def train(args, train_dataset, model, tokenizer):
 
 def evaluate(args, model, tokenizer, prefix=""):
     dataset, examples, features = load_and_cache_examples(args, tokenizer, evaluate=True, output_examples=True)
+    eval_graph = load_graph(args, evaluate=True)
 
     if not os.path.exists(args.output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(args.output_dir)
@@ -392,6 +395,13 @@ def evaluate(args, model, tokenizer, prefix=""):
     results = squad_evaluate(examples, predictions)
     return results
 
+def load_graph(args, evaluate=True):
+    graph_f = open("./data/squad_v2/graph/v1", "r")
+    graph_dict = dict()
+    for line in graph_f.readlines():
+        instance = jsonpickle.decode(line)
+        graph_dict[instance["qid"]] = instance["graph"]
+    return graph_dict
 
 def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=False):
     if args.local_rank not in [-1, 0] and not evaluate:
@@ -452,7 +462,6 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
     if output_examples:
         return dataset, examples, features
     return dataset
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -743,6 +752,7 @@ def main():
     # Training
     if args.do_train:
         train_dataset = load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=False)
+        train_graph = load_graph(args, evaluate=False)
         global_step, tr_loss = train(args, train_dataset, model, tokenizer)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 

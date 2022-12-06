@@ -21,7 +21,7 @@ from functools import partial
 from multiprocessing import Pool, cpu_count
 from components.hg_parser import ConstituencyParser, ConstituencyNode
 
-from transformers.data.processors import DataProcessor
+from transformers.data.processors.utils import DataProcessor
 from transformers.utils import is_tf_available, is_torch_available, logging
 from transformers.models.bert.tokenization_bert import whitespace_tokenize
 from transformers.tokenization_utils_base import BatchEncoding, PreTrainedTokenizerBase, TruncationStrategy
@@ -435,92 +435,99 @@ def squad_convert_examples_to_features(
 
     # Constituency Graph Construction
     # Stanford NLP Parser doesn‘t support multiprocessing mode, so that we need to operate it with the single track.
-    # c_parser = ConstituencyParser()
-    # graph_f = open("./data/squad_v2/graph/v1", "w")
+    c_parser = ConstituencyParser()
+    graph_f = open("./data/squad_v2/graph/v1", "w")
+    graph_ids = list()
+    graph_id = 0
 
-    # for feature in tqdm(features, desc="constituency graph construction"):
-    #     # 0) Meta info
-    #     start_position = feature.start_position
-    #     end_position = feature.end_position
-    #     qas_id = feature.qas_id
-    #     context = tokenizer.decode(feature.input_ids[feature.sep_index+1:], skip_special_tokens=True)
-    #     constituents = c_parser.get_sentences(context)
+    for feature in tqdm(features, desc="constituency graph construction"):
+        # 0) Meta info
+        start_position = feature.start_position
+        end_position = feature.end_position
+        qas_id = feature.qas_id
+        context = tokenizer.decode(feature.input_ids[feature.sep_index+1:], skip_special_tokens=True)
+        constituents = c_parser.get_sentences(context)
 
-    #     # 1) token2token feature mapping dict
-    #     token2token_mapping = dict()
-    #     for index, token in enumerate(feature.doc_tokens):
-    #         token2token_mapping[index] = feature.sep_index + index
+        # 1) token2token feature mapping dict
+        token2token_mapping = dict()
+        for index, token in enumerate(feature.doc_tokens):
+            token2token_mapping[index] = feature.sep_index + index
 
-    #     # 2) leaf2token feature mapping dict
-    #     try:
-    #         leaf_id = 0
-    #         last_token_id = feature.sep_index + 1
-    #         leaf_node_mapping = dict()
+        # 2) leaf2token feature mapping dict
+        try:
+            leaf_id = 0
+            last_token_id = feature.sep_index + 1
+            leaf_node_mapping = dict()
 
-    #         for constituent in constituents:
-    #             leaves = constituent.constituency.leaf_labels()
-    #             for leaf in leaves:
-    #                 leaf = leaf.lower()
-    #                 current_token_text = ""
-    #                 current_token_ids = list()
-    #                 while current_token_text != leaf:
-    #                     current_token_text += feature.tokens[last_token_id] if not feature.tokens[last_token_id].startswith("##") else feature.tokens[last_token_id][2:]
-    #                     current_token_ids += [last_token_id]
-    #                     last_token_id += 1
-    #                 leaf_node_mapping[leaf_id] = current_token_ids
-    #                 leaf_id += 1
-    #     except Exception as e:
-    #         print("Constituents Leaf Parser Failed, Skip this one: {e}")
-    #         continue
+            for constituent in constituents:
+                leaves = constituent.constituency.leaf_labels()
+                for leaf in leaves:
+                    leaf = leaf.lower()
+                    current_token_text = ""
+                    current_token_ids = list()
+                    while current_token_text != leaf:
+                        current_token_text += feature.tokens[last_token_id] if not feature.tokens[last_token_id].startswith("##") else feature.tokens[last_token_id][2:]
+                        current_token_ids += [last_token_id]
+                        last_token_id += 1
+                    leaf_node_mapping[leaf_id] = current_token_ids
+                    leaf_id += 1
+        except Exception as e:
+            # If the preterminals are different with tokens
+            print("Constituents Leaf Parser Failed, Skip this one: {e}")
+            graph_ids += [-1]
+            continue
 
-    #     # 3) constituent2leaf feature mapping dict
-    #     try:
-    #         pid, cid = 0, 1000000000
+        # 3) constituent2leaf feature mapping dict
+        try:
+            pid, cid = 0, 1000000000
 
-    #         def iterate_tree(root):
-    #             nonlocal pid, cid
-    #             if root.is_preterminal():
-    #                 tids=leaf_node_mapping[pid]
-    #                 is_answer = False
-    #                 if tids[0] == start_position and tids[-1] == end_position:
-    #                     is_answer = True
-    #                 leaf_node = ConstituencyNode(cid=pid, label=root.label, text=root.leaf_labels(), lids=[pid], tids=tids, children=[], is_answer=is_answer)
-    #                 pid += 1
-    #                 return leaf_node
-    #             else:
-    #                 child_nodes, lids, tids = list(), list(), list()
-    #                 for child in root.children:
-    #                     child_node = iterate_tree(child)
-    #                     child_nodes += [child_node]
-    #                     lids += child_node.lids
-    #                     for lid in child_node.lids:
-    #                         tids += leaf_node_mapping[lid]
-    #                 is_answer = False
-    #                 if tids[0] == start_position and tids[-1] == end_position:
-    #                     is_answer = True
-    #                 leaf_node = ConstituencyNode(cid=cid, label=root.label, text=root.leaf_labels(), lids=lids, tids=tids, children=child_nodes, is_answer=is_answer)
-    #                 cid += 1
-    #                 return leaf_node
+            def iterate_tree(root):
+                nonlocal pid, cid
+                if root.is_preterminal():
+                    tids=leaf_node_mapping[pid]
+                    is_answer = False
+                    if tids[0] == start_position and tids[-1] == end_position:
+                        is_answer = True
+                    leaf_node = ConstituencyNode(cid=pid, label=root.label, text=root.leaf_labels(), lids=[pid], tids=tids, children=[], is_answer=is_answer)
+                    pid += 1
+                    return leaf_node
+                else:
+                    child_nodes, lids, tids = list(), list(), list()
+                    for child in root.children:
+                        child_node = iterate_tree(child)
+                        child_nodes += [child_node]
+                        lids += child_node.lids
+                        for lid in child_node.lids:
+                            tids += leaf_node_mapping[lid]
+                    is_answer = False
+                    if tids[0] == start_position and tids[-1] == end_position:
+                        is_answer = True
+                    leaf_node = ConstituencyNode(cid=cid, label=root.label, text=root.leaf_labels(), lids=lids, tids=tids, children=child_nodes, is_answer=is_answer)
+                    cid += 1
+                    return leaf_node
             
-    #         child_nodes, lids, tids = list(), list(), list()
-    #         for constituent in constituents:
-    #             root = iterate_tree(constituent.constituency)
-    #             child_nodes += [root]
-    #             lids += root.lids
-    #             for lid in root.lids:
-    #                 tids += leaf_node_mapping[lid]
+            child_nodes, lids, tids = list(), list(), list()
+            for constituent in constituents:
+                root = iterate_tree(constituent.constituency)
+                child_nodes += [root]
+                lids += root.lids
+                for lid in root.lids:
+                    tids += leaf_node_mapping[lid]
 
-    #         c_graph_node = ConstituencyNode(cid=cid, label="CONTEXT", text=context, lids=lids, tids=tids, children=child_nodes, is_answer=False)
+            c_graph_node = ConstituencyNode(cid=cid, label="CONTEXT", text=context, lids=lids, tids=tids, children=child_nodes, is_answer=False)
 
-    #         # For debugging
-    #         # ConstituencyNode.iterate(c_graph_node)
-    #         graph_f.write(jsonpickle.encode({"qid": qas_id, "graph": c_graph_node}, indent=None))
+            # For debugging
+            # ConstituencyNode.iterate(c_graph_node)
+            graph_f.write(jsonpickle.encode({"qid": graph_id, "graph": c_graph_node}, indent=None) + "\n")
+            graph_ids += [graph_id]
+            graph_id += 1
 
-    #     except Exception as e:
-    #         print(f"Constituents Token Parser Failed, Skip This One: {e}")
-    #         continue
+        except Exception as e:
+            print(f"Constituents Token Parser Failed, Skip This One: {e}")
+            graph_ids += [-1]
+            continue
 
-    # graph_f.close()
+    graph_f.close()
 
     if return_dataset == "pt":
         if not is_torch_available():
@@ -533,11 +540,18 @@ def squad_convert_examples_to_features(
         all_cls_index = torch.tensor([f.cls_index for f in features], dtype=torch.long)
         all_p_mask = torch.tensor([f.p_mask for f in features], dtype=torch.float)
         all_is_impossible = torch.tensor([f.is_impossible for f in features], dtype=torch.float)
+        all_qas_id = torch.tensor(graph_ids, dtype=torch.long)
 
         if not is_training:
             all_feature_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
             dataset = TensorDataset(
-                all_input_ids, all_attention_masks, all_token_type_ids, all_feature_index, all_cls_index, all_p_mask
+                all_input_ids, 
+                all_attention_masks, 
+                all_token_type_ids, 
+                all_feature_index, 
+                all_cls_index, 
+                all_p_mask,
+                all_qas_id,
             )
         else:
             all_start_positions = torch.tensor([f.start_position for f in features], dtype=torch.long)
@@ -551,6 +565,7 @@ def squad_convert_examples_to_features(
                 all_cls_index,
                 all_p_mask,
                 all_is_impossible,
+                all_qas_id,
             )
 
         return features, dataset
