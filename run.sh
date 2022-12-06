@@ -7,7 +7,7 @@ python3 run_squad.py \
     --do_eval \
     --do_lower_case \
     --version_2_with_negative \
-    --save_steps 100000 \
+    --save_steps 10000 \
     --train_file $SQUAD_DIR/train-v2.0.json \
     --predict_file $SQUAD_DIR/dev-v2.0.json \
     --per_gpu_train_batch_size 4 \
