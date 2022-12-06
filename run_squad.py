@@ -33,8 +33,8 @@ from model.graph_qa_model import GraphQA
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from components.squad import squad_convert_examples_to_features, SquadResult, SquadV1Processor, SquadV2Processor
-
-
+# from transformers.data.processors.squad import SquadResult, SquadV1Processor, SquadV2Processor
+# from transformers import squad_convert_examples_to_features
 
 from transformers import (
     MODEL_FOR_QUESTION_ANSWERING_MAPPING,
@@ -391,9 +391,6 @@ def evaluate(args, model, tokenizer, prefix=""):
     # Compute the F1 and exact scores.
     results = squad_evaluate(examples, predictions)
     return results
-
-def load_graph(args):
-    pass
 
 
 def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=False):
