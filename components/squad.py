@@ -480,6 +480,7 @@ def squad_convert_examples_to_features(
         # 3) constituent2leaf feature mapping dict
         try:
             pid, cid = 0, 1000000000
+            R_cc, R_ct = list(), list()
 
             def iterate_tree(root):
                 nonlocal pid, cid
@@ -489,6 +490,7 @@ def squad_convert_examples_to_features(
                     if tids[0] == start_position and tids[-1] == end_position:
                         is_answer = True
                     leaf_node = ConstituencyNode(cid=pid, label=root.label, text=root.leaf_labels(), lids=[pid], tids=tids, children=[], is_answer=is_answer)
+                    R_ct += [[pid, tid] for tid in tids]
                     pid += 1
                     return leaf_node
                 else:
@@ -503,10 +505,13 @@ def squad_convert_examples_to_features(
                     if tids[0] == start_position and tids[-1] == end_position:
                         is_answer = True
                     leaf_node = ConstituencyNode(cid=cid, label=root.label, text=root.leaf_labels(), lids=lids, tids=tids, children=child_nodes, is_answer=is_answer)
+                    R_cc += [[cid, cid_] for cid_ in child_nodes]
+                    R_ct += [[cid, tid] for tid in tids]
                     cid += 1
                     return leaf_node
             
             child_nodes, lids, tids = list(), list(), list()
+            
             for constituent in constituents:
                 root = iterate_tree(constituent.constituency)
                 child_nodes += [root]
@@ -515,10 +520,15 @@ def squad_convert_examples_to_features(
                     tids += leaf_node_mapping[lid]
 
             c_graph_node = ConstituencyNode(cid=cid, label="CONTEXT", text=context, lids=lids, tids=tids, children=child_nodes, is_answer=False)
+            
+            c_edge_index = {
+                ("token", "connect", "constituent"): torch.tensor(R_ct).t().contiguous(),
+                ("constituent", "connect", "constituent"): torch.tensor(R_cc).t().contiguous(),
+            }
 
             # For debugging
             # ConstituencyNode.iterate(c_graph_node)
-            graph_f.write(jsonpickle.encode({"qid": graph_id, "graph": c_graph_node}, indent=None) + "\n")
+            graph_f.write(jsonpickle.encode({"qid": graph_id, "graph": c_graph_node, "edge_index": c_edge_index}, indent=None) + "\n")
             graph_ids += [graph_id]
             graph_id += 1
 

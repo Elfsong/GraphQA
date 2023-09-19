@@ -77,16 +77,16 @@ class GraphQA(BertPreTrainedModel):
         self.qa_outputs = Linear(config.hidden_size, 2)
 
         # Heterogenous Graph
-        # self.lin_dict = torch.nn.ModuleDict()
-        # for node_type in self.node_types:
-        #     self.lin_dict[node_type] = Linear(-1, self.graph_hidden_channels)
+        self.lin_dict = torch.nn.ModuleDict()
+        for node_type in self.node_types:
+            self.lin_dict[node_type] = Linear(-1, self.graph_hidden_channels)
         
-        # self.convs = torch.nn.ModuleList()
-        # for _ in range(self.graph_layer):
-        #     conv = HGTConv(self.graph_hidden_channels, self.graph_hidden_channels, self.metadata, self.graph_head, group='sum')
-        #     self.convs.append(conv)
+        self.convs = torch.nn.ModuleList()
+        for _ in range(self.graph_layer):
+            conv = HGTConv(self.graph_hidden_channels, self.graph_hidden_channels, self.metadata, self.graph_head, group='sum')
+            self.convs.append(conv)
 
-        # self.graph_qa_outputs = Linear(self.graph_hidden_channels, 2)
+        self.graph_qa_outputs = Linear(self.graph_hidden_channels, 2)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -103,6 +103,7 @@ class GraphQA(BertPreTrainedModel):
         end_positions: Optional[torch.Tensor] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
+        graph_data: Optional[dict] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple[torch.Tensor], QuestionAnsweringModelOutput]:
         r"""
@@ -129,25 +130,45 @@ class GraphQA(BertPreTrainedModel):
             return_dict=return_dict,
         )
 
-        sequence_output = outputs[0]
+        # Ablation
+        # sequence_output = outputs[0]
         
-        # # TODO(mingzhe): construct x_dict
-        # x_dict = dict()
-        # for node_type, x in x_dict.items():
-        #     x_dict[node_type] = self.lin_dict[node_type](x).relu_()
+        # Graph
+        # x_dict: A dictionary holding input node features for each individual node type.
+        # edge_index_dict: A dictionary holding graph connectivity information for each individual edge type.
         
-        # # TODO(mingzhe): construct edge_index_dict
-        # edge_index_dict = dict()
-        # for conv in self.convs:
-        #     x_dict = conv(x_dict, edge_index_dict)
+        def get_embedding(node):
+            if not node:
+                return list()
+            else:
+                pooled_embedding = torch.zeros(768)
+                for tid in node.tids:
+                    pooled_embedding += outputs[0][tid]
+                return [pooled_embedding] + [get_embedding(child) for child in node.children]
+            
+        # Get x_dict
+        x_dict = {
+            "token": outputs[0],
+            # "leaf": outputs[0], # Connect token and constituent
+            "constituent": torch.stack(get_embedding(graph_data["graph"])),
+        }
 
-        # logits = self.graph_qa_outputs(x_dict['constituent'])
+        # Get edge_index_dict
+        edge_index_dict = graph_data["edge_index"]
+        
+        # node_type in ["token", "leaf", "constituent"]
+        for node_type, x in x_dict.items():
+            x_dict[node_type] = self.lin_dict[node_type](x).relu_()
+        
+        for conv in self.convs:
+            x_dict = conv(x_dict, edge_index_dict)
 
-        logits = self.qa_outputs(sequence_output)
+        logits = self.graph_qa_outputs(x_dict['token'])
+        # logits = self.qa_outputs(sequence_output)
 
         start_logits, end_logits = logits.split(1, dim=-1)
         start_logits = start_logits.squeeze(-1).contiguous()
-        end_logits = end_logits.squeeze(-1).contiguous()
+        end_logits   = end_logits.squeeze(-1).contiguous()
 
         total_loss = None
         if start_positions is not None and end_positions is not None:

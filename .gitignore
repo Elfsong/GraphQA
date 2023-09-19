@@ -10,3 +10,4 @@ runs/*
 tmp/*
 exp/
 
+prediction.csv

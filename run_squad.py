@@ -80,7 +80,7 @@ def to_list(tensor):
     return tensor.detach().cpu().tolist()
 
 
-def train(args, train_dataset, model, tokenizer):
+def train(args, train_dataset, train_graph, model, tokenizer):
     """Train the model"""
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter()
@@ -179,8 +179,9 @@ def train(args, train_dataset, model, tokenizer):
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
 
+            # Retrieve Graph Structure from train_graph
             for bid in batch[8]:
-                print(bid)
+                graph_data = train_graph[int(bid.cpu().detach().item())]
 
             inputs = {
                 "input_ids": batch[0],
@@ -188,6 +189,7 @@ def train(args, train_dataset, model, tokenizer):
                 "token_type_ids": batch[2],
                 "start_positions": batch[3],
                 "end_positions": batch[4],
+                "graph_data": graph_data,
             }
 
             if args.model_type in ["xlm", "roberta", "distilbert", "camembert", "bart", "longformer"]:
@@ -262,6 +264,7 @@ def train(args, train_dataset, model, tokenizer):
 
 
 def evaluate(args, model, tokenizer, prefix=""):
+    # Deprecated (using standard Squad instad)
     dataset, examples, features = load_and_cache_examples(args, tokenizer, evaluate=True, output_examples=True)
     eval_graph = load_graph(args, evaluate=True)
 
@@ -396,11 +399,13 @@ def evaluate(args, model, tokenizer, prefix=""):
     return results
 
 def load_graph(args, evaluate=True):
+    print("Start to load graph")
     graph_f = open("./data/squad_v2/graph/v1", "r")
     graph_dict = dict()
-    for line in graph_f.readlines():
+    for line in tqdm(graph_f.readlines()):
         instance = jsonpickle.decode(line)
-        graph_dict[instance["qid"]] = instance["graph"]
+        graph_dict[instance["qid"]] = instance
+    print("Graph Loaded.")
     return graph_dict
 
 def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=False):
@@ -469,14 +474,14 @@ def main():
     # Required parameters
     parser.add_argument(
         "--model_type",
-        default=None,
+        default="bert",
         type=str,
         required=True,
         help="Model type selected in the list: " + ", ".join(MODEL_TYPES),
     )
     parser.add_argument(
         "--model_name_or_path",
-        default=None,
+        default="bert-base-uncased",
         type=str,
         required=True,
         help="Path to pretrained model or model identifier from huggingface.co/models",
@@ -753,7 +758,8 @@ def main():
     if args.do_train:
         train_dataset = load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=False)
         train_graph = load_graph(args, evaluate=False)
-        global_step, tr_loss = train(args, train_dataset, model, tokenizer)
+        # TODO(mingzhe): Merge these two parts
+        global_step, tr_loss = train(args, train_dataset, train_graph, model, tokenizer)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
     # Save the trained model and the tokenizer
